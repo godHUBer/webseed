@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webseed</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500&family=Caveat:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app" class="desktop-layout">
+        <!-- Top App Bar simulating window frame -->
+        <header class="app-window-bar">
+            <div class="window-title">Webseed</div>
+            <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light mode" aria-pressed="false" title="Toggle light and dark mode">
+                <span class="theme-toggle-label">Theme</span>
+                <span class="theme-toggle-track" aria-hidden="true">
+                    <span class="theme-toggle-icon theme-toggle-icon-sun">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+                    </span>
+                    <span class="theme-toggle-thumb"></span>
+                    <span class="theme-toggle-icon theme-toggle-icon-moon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path></svg>
+                    </span>
+                </span>
+            </button>
+        </header>
+
+        <div class="app-body">
+            <!-- Left Canvas Area -->
+            <main class="canvas-area">
+                <!-- Floating Top Toolbar in Canvas -->
+                <div class="floating-toolbar">
+                    <button class="icon-btn" id="history-undo" title="Undo">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 0 1 5 5v2a5 5 0 0 1-5 5H8"></path><polyline points="8 5 3 10 8 15"></polyline></svg>
+                    </button>
+                    <button class="icon-btn" id="history-redo" title="Redo">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" transform="scale(-1, 1) translate(-24, 0)"><path d="M3 10h10a5 5 0 0 1 5 5v2a5 5 0 0 1-5 5H8"></path><polyline points="8 5 3 10 8 15"></polyline></svg>
+                    </button>
+                    <div class="divider"></div>
+                    <button class="icon-btn" id="history-layers" title="Edit Stack">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L3 8l9 5 9-5-9-5z"></path><path d="M3 12l9 5 9-5"></path><path d="M3 16l9 5 9-5"></path></svg>
+                    </button>
+                </div>
+
+                <div class="history-panel" id="history-panel" style="display: none;">
+                    <div class="history-panel-header">
+                        <div>
+                            <div class="history-panel-title">Edit Stack</div>
+                            <div class="history-panel-subtitle" id="history-panel-subtitle">Every successful edit is saved here.</div>
+                        </div>
+                        <button class="icon-btn history-close" id="history-close" title="Close Stack">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+                    <div class="history-panel-actions">
+                        <button class="workflow-action compact" id="history-delete-selected">Delete Selected Edit</button>
+                    </div>
+                    <div class="history-list" id="history-list"></div>
+                </div>
+
+                <div class="canvas-container" style="position: relative;">
+                    <div class="upload-prompt" id="upload-prompt">
+                    <button class="primary-btn pulse-btn" onclick="document.getElementById('image-upload').click()">OPEN IMAGE OR PROJECT</button>
+                    <input type="file" id="image-upload" accept="image/*,.json,application/json" hidden>
+                        <p style="margin-top: 12px; color: #888; font-size: 13px;">Or drag & drop here</p>
+                    </div>
+                    <canvas id="editor-canvas" style="display: none;"></canvas>
+                    
+                    <!-- Crop Interactive Overlay (Tracks Canvas bounds) -->
+                    <div id="crop-ui-overlay" style="display: none; position: absolute; pointer-events: none; z-index: 10;">
+                        <div id="crop-mask-top" style="position: absolute; top: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); pointer-events: none;"></div>
+                        <div id="crop-mask-bottom" style="position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6); pointer-events: none;"></div>
+                        <div id="crop-mask-left" style="position: absolute; background: rgba(0,0,0,0.6); pointer-events: none;"></div>
+                        <div id="crop-mask-right" style="position: absolute; background: rgba(0,0,0,0.6); pointer-events: none;"></div>
+                        
+                        <!-- Bright Crop Box -->
+                        <div id="crop-box" style="position: absolute; border: 2px solid white; box-sizing: border-box; box-shadow: 0 0 0 1px rgba(0,0,0,0.3) inset, 0 0 0 1px rgba(0,0,0,0.3); pointer-events: auto; touch-action: none;">
+                            <!-- 3x3 Grid (shown while dragging) -->
+                            <div id="crop-grid" style="display: none; width: 100%; height: 100%; position: absolute; top:0; left:0; pointer-events: none;">
+                                <div style="position: absolute; top: 33.33%; left: 0; width: 100%; height: 1px; background: rgba(255,255,255,0.7);"></div>
+                                <div style="position: absolute; top: 66.66%; left: 0; width: 100%; height: 1px; background: rgba(255,255,255,0.7);"></div>
+                                <div style="position: absolute; top: 0; left: 33.33%; width: 1px; height: 100%; background: rgba(255,255,255,0.7);"></div>
+                                <div style="position: absolute; top: 0; left: 66.66%; width: 1px; height: 100%; background: rgba(255,255,255,0.7);"></div>
+                            </div>
+                            
+                            <!-- Handles -->
+                            <div class="crop-handle nw" data-dir="nw" style="position: absolute; top: -15px; left: -15px; width: 40px; height: 40px; cursor: nwse-resize;"><div style="position: absolute; top: 15px; left: 15px; width: 16px; height: 16px; border-top: 3px solid white; border-left: 3px solid white;"></div></div>
+                            <div class="crop-handle ne" data-dir="ne" style="position: absolute; top: -15px; right: -15px; width: 40px; height: 40px; cursor: nesw-resize;"><div style="position: absolute; top: 15px; right: 15px; width: 16px; height: 16px; border-top: 3px solid white; border-right: 3px solid white;"></div></div>
+                            <div class="crop-handle sw" data-dir="sw" style="position: absolute; bottom: -15px; left: -15px; width: 40px; height: 40px; cursor: nesw-resize;"><div style="position: absolute; bottom: 15px; left: 15px; width: 16px; height: 16px; border-bottom: 3px solid white; border-left: 3px solid white;"></div></div>
+                            <div class="crop-handle se" data-dir="se" style="position: absolute; bottom: -15px; right: -15px; width: 40px; height: 40px; cursor: nwse-resize;"><div style="position: absolute; bottom: 15px; right: 15px; width: 16px; height: 16px; border-bottom: 3px solid white; border-right: 3px solid white;"></div></div>
+                            
+                            <div class="crop-handle n" data-dir="n" style="position: absolute; top: -10px; left: 25px; right: 25px; height: 20px; cursor: ns-resize;"></div>
+                            <div class="crop-handle s" data-dir="s" style="position: absolute; bottom: -10px; left: 25px; right: 25px; height: 20px; cursor: ns-resize;"></div>
+                            <div class="crop-handle e" data-dir="e" style="position: absolute; right: -10px; top: 25px; bottom: 25px; width: 20px; cursor: ew-resize;"></div>
+                            <div class="crop-handle w" data-dir="w" style="position: absolute; left: -10px; top: 25px; bottom: 25px; width: 20px; cursor: ew-resize;"></div>
+                        </div>
+                    </div>
+
+                <canvas id="crop-ui-overlay-legacy" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 10;"></canvas>
+                <!-- Rotate Grid Overlay -->
+                <canvas id="rotate-ui-overlay-legacy" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></canvas>
+                <!-- Selective Nodes Overlay -->
+                <div id="selective-ui-overlay-legacy" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;"></div>
+                <!-- Lens Blur Interactive Canvas -->
+                <canvas id="lens-blur-interactive-canvas-legacy" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 10; cursor: crosshair;"></canvas>
+                <!-- Lens Blur UI Visual Elements Overlay (dots/rings) -->
+                <canvas id="lens-blur-ui-overlay-legacy" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 11;"></canvas>
+                <!-- Vignette Interactive Canvas -->
+                <canvas id="vignette-interactive-canvas-legacy" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 10; cursor: crosshair;"></canvas>
+                <!-- Vignette UI Visual Elements Overlay -->
+                <canvas id="vignette-ui-overlay-legacy" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 11;"></canvas>
+                <!-- Text Tool Interactive Canvas -->
+                <canvas id="text-interactive-canvas" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 10; cursor: move;"></canvas>
+                <!-- Text Tool Input (Hidden until double tap) -->
+                <textarea id="text-edit-input" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 200; background: rgba(0,0,0,0.8); color: white; font-family: 'Inter', sans-serif; font-size: 24px; text-align: center; border: 2px solid #ccc; outline: none; border-radius: 8px; padding: 12px; resize: none; min-width: 250px; min-height: 80px;" placeholder="Type here..."></textarea>
+                <!-- Frames Drag Overlay -->
+                <div id="frames-interactive-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; z-index: 10; cursor: ew-resize;"></div>
+                    <!-- Rotate UI Overlay -->
+                    <div id="rotate-ui-overlay" style="display: none; position: absolute; top:0; left:0; width:100%; height:100%; pointer-events: none; z-index: 9;">
+                        <!-- Top floating info text -->
+                        <div id="rotate-angle-badge" style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); color: #fff; font-weight: 500; font-size: 14px; letter-spacing: 0.5px; background: rgba(0,0,0,0.5); padding: 4px 12px; border-radius: 4px; pointer-events: none;">Straighten Angle 0.00°</div>
+                        <div id="rotate-processing-badge" style="display: none; position: absolute; top: 48px; left: 50%; transform: translateX(-50%); color: #fff; font-weight: 500; font-size: 12px; letter-spacing: 0.5px; background: rgba(66,133,244,0.8); padding: 4px 10px; border-radius: 4px; pointer-events: none;">Synthesizing...</div>
+                        <!-- Grid overlay (shows during drag) -->
+                        <div id="rotate-grid" style="display: none; position: absolute; top:0; left:0; width: 100%; height: 100%; background-image: linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px); background-size: 10% 10%; background-position: -1px -1px; pointer-events: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Lens Blur Overlay -->
+                <div id="lens-blur-ui-overlay" class="ui-overlay" style="display:none; position:absolute; inset:0; pointer-events:auto; z-index: 10;">
+                    <div id="lens-blur-hint" style="position:absolute; top:16px; left:50%; transform:translateX(-50%); color:#fff; font-weight:500; font-size:12px; letter-spacing:0.2px; background:rgba(0,0,0,0.45); padding:6px 12px; border-radius:999px; pointer-events:none;">Drag to move or reshape. Wheel changes bokeh.</div>
+                    <canvas id="lens-blur-interactive-canvas" style="width:100%; height:100%;"></canvas>
+                </div>
+
+                <!-- Vignette Overlay -->
+                <div id="vignette-ui-overlay" class="ui-overlay" style="display:none; position:absolute; inset:0; pointer-events:auto; z-index: 10;">
+                    <div id="vignette-hint" style="position:absolute; top:16px; left:50%; transform:translateX(-50%); color:#fff; font-weight:500; font-size:12px; letter-spacing:0.2px; background:rgba(0,0,0,0.45); padding:6px 12px; border-radius:999px; pointer-events:none;">Drag the blue dot. Drag the ring to resize. Wheel changes size.</div>
+                    <canvas id="vignette-interactive-canvas" style="width:100%; height:100%;"></canvas>
+                </div>
+
+                <!-- Tune Image Bottom Bar -->
+                <div id="tune-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" id="tune-close" title="Cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Sliders (Manual) -->
+                    <button class="icon-btn" title="Manual" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                    <!-- Auto-Tune Wand -->
+                    <button class="icon-btn" id="tune-auto" title="Auto Tune" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 4L4 20M16 4l4 4M4 16l4 4M21 11a2 2 0 01-2 2H5a2 2 0 01-2-2v-1M12 9v-2"/></svg></button>
+                    <!-- Checkmark -->
+                    <button class="icon-btn" id="tune-apply" title="Apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- Crop Bottom Bar -->
+                <div id="crop-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; background-color: #fff; z-index: 100; flex-direction: column; border-top: 1px solid #ccc; color: #555;">
+                    <!-- Top Row: Presets -->
+                    <div style="display: flex; justify-content: space-around; width: 100%; padding: 8px 0; border-bottom: 1px solid #eee;">
+                        <button class="icon-btn crop-preset" data-ratio="free" style="flex-direction: column; font-size: 10px; color: #4285F4; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 1v4m0 0h-4m4 0l-5-5"/></svg>
+                            <span>Free</span>
+                        </button>
+                        <button class="icon-btn crop-preset" data-ratio="original" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/><path d="M21 15l-5-5L5 21"/></svg>
+                            <span>Original</span>
+                        </button>
+                        <button class="icon-btn crop-preset" data-ratio="1" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
+                            <span>Square</span>
+                        </button>
+                        <button class="icon-btn crop-preset" data-ratio="1.5" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2" ry="2"></rect></svg>
+                            <span>3:2</span>
+                        </button>
+                        <button class="icon-btn crop-preset" data-ratio="1.333" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="14" rx="2" ry="2"></rect></svg>
+                            <span>4:3</span>
+                        </button>
+                    </div>
+                    <!-- Bottom Row: Operations -->
+                    <div style="display: flex; justify-content: space-between; width: 100%; padding: 12px 16px; align-items: center; box-sizing: border-box;">
+                        <button class="icon-btn" id="crop-close" title="Cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                        <button class="icon-btn" id="crop-rotate-90" title="Rotate" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+                        <button class="icon-btn" id="crop-flip-aspect" title="Aspect Toggle" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="4" width="8" height="16" rx="1" ry="1"></rect><line x1="4" y1="8" x2="4" y2="16"></line><line x1="20" y1="8" x2="20" y2="16"></line></svg></button>
+                        <button class="icon-btn" id="crop-apply" title="Apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                    </div>
+                </div>
+
+                <!-- Rotate Bottom Bar -->
+                <div id="rotate-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-between; padding: 0 16px; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" id="rotate-close" title="Cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    
+                    <div style="display: flex; gap: 32px;">
+                        <button class="icon-btn" id="rotate-flip" title="Flip Horizontal" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M8 5l-5 7 5 7M16 5l5 7-5 7"/></svg></button>
+                        <button class="icon-btn" id="rotate-90-btn" title="Rotate 90°" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+                    </div>
+
+                    <button class="icon-btn" id="rotate-apply" title="Apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- Details Bottom Bar -->
+                <div id="details-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" id="details-close" title="Cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Sliders (Manual) -->
+                    <button class="icon-btn" title="Manual" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                    <!-- Disabled Auto Wand -->
+                    <button class="icon-btn" title="Auto Tune" style="color: #ccc; cursor: not-allowed;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 4L4 20M16 4l4 4M4 16l4 4M21 11a2 2 0 01-2 2H5a2 2 0 01-2-2v-1M12 9v-2"/><line x1="4" y1="4" x2="20" y2="20" stroke-width="2"/></svg></button>
+                    <!-- Checkmark -->
+                    <button class="icon-btn" id="details-apply" title="Apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+
+                <!-- Selective UI Overlays -->
+                <div id="selective-ui-overlay" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 60;">
+                    <!-- Selective nodes dynamically injected here -->
+                </div>
+
+                <div id="selective-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 60px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" id="selective-close" title="Cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Add Point Button -->
+                    <button class="icon-btn" id="selective-add" title="Add Point" style="color: #4285F4; border-radius: 50%; border: 1px solid #ccc; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #fff;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+                    <!-- Visibility Toggle -->
+                    <button class="icon-btn" id="selective-view" title="Toggle Mask" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    <button class="icon-btn" id="selective-apply" title="Apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- Selective Popup Menu -->
+                <div id="selective-popup" class="snapseed-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="radius">
+                            <span class="popup-label">R &nbsp; Radius (Size)</span>
+                            <span class="popup-value">25</span>
+                        </div>
+                        <div class="popup-item" data-filter="brightness">
+                            <span class="popup-label">B &nbsp; Brightness</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="contrast">
+                            <span class="popup-label">C &nbsp; Contrast</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="saturation">
+                            <span class="popup-label">S &nbsp; Saturation</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="structure">
+                            <span class="popup-label">St &nbsp; Structure</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- Tune Image Popup Menu -->
+                <div id="tune-image-popup" class="snapseed-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="brightness">
+                            <span class="popup-label">Brightness</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="contrast">
+                            <span class="popup-label">Contrast</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="saturation">
+                            <span class="popup-label">Saturation</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="ambiance">
+                            <span class="popup-label">Ambiance</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="highlights">
+                            <span class="popup-label">Highlights</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="shadows">
+                            <span class="popup-label">Shadows</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="warmth">
+                            <span class="popup-label">Warmth</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- Details Popup Menu -->
+                <div id="details-popup" class="snapseed-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="structure">
+                            <span class="popup-label">Structure</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="sharpen">
+                            <span class="popup-label">Sharpening</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- Curves Popup -->
+                <div id="curves-popup" class="snapseed-popup" style="display: none; width: 280px; background-color: #1a1a1a; color: white;">
+                    <div class="popup-drag-handle" style="background-color: #222; border-bottom: 1px solid #333;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="curves-graph-container" style="padding: 12px; display: flex; justify-content: center;">
+                        <canvas id="curves-graph" width="256" height="256" style="background-color: #111; cursor: crosshair; touch-action: none; border-radius: 4px; box-shadow: inset 0 0 0 1px #333;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Curves Bottom Bar -->
+                <div id="curves-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" id="curves-close" title="Cancel"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#777" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Channel Selector -->
+                    <button class="icon-btn" title="Channel"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#777" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20z"></path></svg></button>
+                    <!-- View/Hide Edits -->
+                    <button class="icon-btn" title="View"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4285F4" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+                    <!-- Presets -->
+                    <button class="icon-btn" title="Presets"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#777" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg></button>
+                    <!-- Checkmark -->
+                    <button class="icon-btn" id="curves-apply" title="Apply"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#777" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- White Balance Popup Menu -->
+                <div id="wb-popup" class="snapseed-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="temperature">
+                            <span class="popup-label">Temperature</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="tint">
+                            <span class="popup-label">Tint</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- Glamour Glow Popup -->
+                <div class="tool-popup" id="glamour-glow-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="glamourGlow">
+                            <span class="popup-label">Glow</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="glamourSaturation">
+                            <span class="popup-label">Saturation</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="glamourWarmth">
+                            <span class="popup-label">Warmth</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- White Balance Bottom Bar -->
+                <div id="wb-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" title="Cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- AW (Auto) -->
+                    <button class="icon-btn" title="Auto White Balance" style="color: #777; display: flex; align-items: center; justify-content: center; position: relative;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>
+                        <span style="position: absolute; font-size: 10px; font-weight: bold; font-family: sans-serif;">AW</span>
+                    </button>
+                    <!-- Sliders (Manual) -->
+                    <button class="icon-btn" title="Manual" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                    <!-- Color Picker -->
+                    <button class="icon-btn" title="Color Picker" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+                    <!-- Checkmark -->
+                    <button class="icon-btn" title="Apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- Glamour Glow Bottom Bar -->
+                <div id="glamour-glow-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; background-color: #fff; z-index: 100; flex-direction: column; border-top: 1px solid #ccc; color: #555;">
+                    <!-- Presets -->
+                    <div style="display: flex; justify-content: space-around; width: 100%; padding: 8px 0; border-bottom: 1px solid #eee;">
+                        <button class="icon-btn glamour-preset" data-preset="1" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <div style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">1</div>
+                        </button>
+                        <button class="icon-btn glamour-preset" data-preset="2" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <div style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">2</div>
+                        </button>
+                        <button class="icon-btn glamour-preset" data-preset="3" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <div style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">3</div>
+                        </button>
+                        <button class="icon-btn glamour-preset" data-preset="4" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <div style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">4</div>
+                        </button>
+                        <button class="icon-btn glamour-preset" data-preset="5" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <div style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid currentColor; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px;">5</div>
+                        </button>
+                    </div>
+                    <!-- Actions -->
+                    <div style="display: flex; justify-content: space-between; width: 100%; padding: 12px 16px; align-items: center; box-sizing: border-box;">
+                        <button class="icon-btn" title="Cancel" id="glamour-glow-cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                        
+                        <button class="icon-btn" title="Manual" id="glamour-glow-manual" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+
+                        <button class="icon-btn" title="Apply" id="glamour-glow-apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                    </div>
+                </div>
+
+                <!-- Grainy Film Popup -->
+                <div class="tool-popup" id="grainy-film-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="grainyFilmGrain">
+                            <span class="popup-label">Grain</span>
+                            <span class="popup-value">50</span>
+                        </div>
+                        <div class="popup-item" data-filter="grainyFilmStyleStrength">
+                            <span class="popup-label">Style Strength</span>
+                            <span class="popup-value">50</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- Grainy Film Bottom Bar -->
+                <div id="grainy-film-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; background-color: #fff; z-index: 100; flex-direction: column; border-top: 1px solid #ccc; color: #555;">
+                    <!-- Presets (Scrollable) -->
+                    <div style="display: flex; overflow-x: auto; width: 100%; padding: 8px 16px; border-bottom: 1px solid #eee; gap: 16px; scrollbar-width: none;">
+                        <div style="display:flex; gap: 16px;" id="grainy-presets-container">
+                            <!-- Populated in JS -->
+                        </div>
+                    </div>
+                    <!-- Actions -->
+                    <div style="display: flex; justify-content: space-between; width: 100%; padding: 12px 16px; align-items: center; box-sizing: border-box;">
+                        <button class="icon-btn" title="Cancel" id="grainy-film-cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                        <button class="icon-btn" title="Manual" id="grainy-film-manual" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                        <button class="icon-btn" title="Apply" id="grainy-film-apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                    </div>
+                </div>
+
+                <!-- Black & White Popup -->
+                <div class="tool-popup" id="bw-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="bwBrightness">
+                            <span class="popup-label">Brightness</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="bwContrast">
+                            <span class="popup-label">Contrast</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                        <div class="popup-item" data-filter="bwGrain">
+                            <span class="popup-label">Grain</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </div>
+                </div>
+
+                <!-- Black & White Bottom Bar -->
+                <div id="bw-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; background-color: #fff; z-index: 100; flex-direction: column; border-top: 1px solid #ccc; color: #555;">
+                    <div style="display: flex; overflow-x: auto; width: 100%; padding: 8px 16px; border-bottom: 1px solid #eee; gap: 16px; scrollbar-width: none;" id="bw-options-container">
+                        <!-- Styles List -->
+                        <div id="bw-styles-list" style="display:flex; gap: 16px; width: 100%; justify-content: space-around;">
+                             <button class="icon-btn bw-style-btn active" data-style="Neutral" style="flex-direction:column; font-size:10px; color:#4285F4; gap:4px;"> <span style="font-weight:bold;">Neu</span> </button>
+                             <button class="icon-btn bw-style-btn" data-style="Contrast" style="flex-direction:column; font-size:10px; color:#777; gap:4px;"> <span>Con</span> </button>
+                             <button class="icon-btn bw-style-btn" data-style="Bright" style="flex-direction:column; font-size:10px; color:#777; gap:4px;"> <span>Bri</span> </button>
+                             <button class="icon-btn bw-style-btn" data-style="Dark" style="flex-direction:column; font-size:10px; color:#777; gap:4px;"> <span>Drk</span> </button>
+                             <button class="icon-btn bw-style-btn" data-style="Film" style="flex-direction:column; font-size:10px; color:#777; gap:4px;"> <span>Flm</span> </button>
+                             <button class="icon-btn bw-style-btn" data-style="Sky" style="flex-direction:column; font-size:10px; color:#777; gap:4px;"> <span>Sky</span> </button>
+                        </div>
+                        <!-- Filters List -->
+                        <div id="bw-filters-list" style="display:none; gap: 16px; width: 100%; justify-content: space-around;">
+                             <button class="icon-btn bw-filter-btn active" data-filter="Neutral" style="flex-direction:column; color:#4285F4; gap:4px;"><div style="width:24px;height:24px;border-radius:50%;background:#aaa;border:2px solid currentColor;"></div></button>
+                             <button class="icon-btn bw-filter-btn" data-filter="Red" style="flex-direction:column; color:#777; gap:4px;"><div style="width:24px;height:24px;border-radius:50%;background:#e53935;"></div></button>
+                             <button class="icon-btn bw-filter-btn" data-filter="Orange" style="flex-direction:column; color:#777; gap:4px;"><div style="width:24px;height:24px;border-radius:50%;background:#ff9800;"></div></button>
+                             <button class="icon-btn bw-filter-btn" data-filter="Yellow" style="flex-direction:column; color:#777; gap:4px;"><div style="width:24px;height:24px;border-radius:50%;background:#ffeb3b;"></div></button>
+                             <button class="icon-btn bw-filter-btn" data-filter="Green" style="flex-direction:column; color:#777; gap:4px;"><div style="width:24px;height:24px;border-radius:50%;background:#4caf50;"></div></button>
+                             <button class="icon-btn bw-filter-btn" data-filter="Blue" style="flex-direction:column; color:#777; gap:4px;"><div style="width:24px;height:24px;border-radius:50%;background:#2196f3;"></div></button>
+                        </div>
+                    </div>
+                    <!-- Actions -->
+                    <div style="display: flex; justify-content: space-between; width: 100%; padding: 12px 16px; align-items: center; box-sizing: border-box;">
+                        <button class="icon-btn" title="Cancel" id="bw-cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                        <div style="display:flex; gap: 32px;">
+                             <button class="icon-btn" id="bw-toggle-styles" title="Presets" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg></button>
+                             <button class="icon-btn" id="bw-toggle-filters" title="Color Filters" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><circle cx="12" cy="12" r="4"></circle></svg></button>
+                             <button class="icon-btn" title="Manual" id="bw-manual" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                        </div>
+                        <button class="icon-btn" title="Apply" id="bw-apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                    </div>
+                </div>
+
+                <!-- Lens Blur Popup -->
+                <div class="tool-popup" id="lens-blur-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="lbStrength">
+                            <span class="popup-label">Blur Strength</span>
+                            <span class="popup-value">50</span>
+                        </div>
+                        <div class="popup-item" data-filter="lbTransition">
+                            <span class="popup-label">Transition</span>
+                            <span class="popup-value">50</span>
+                        </div>
+                        <div class="popup-item" data-filter="lbVignette">
+                            <span class="popup-label">Vignette Strength</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                </div>
+
+                <!-- Bokeh Shape Popup -->
+                <div id="bokeh-shape-popup" style="display: none; position: absolute; bottom: 50px; left: 0; right: 0; background: rgba(255,255,255,0.95); z-index: 99; padding: 12px; border-top: 1px solid #ccc; overflow-x: auto; white-space: nowrap;">
+                    <div style="display: flex; gap: 16px; align-items: center; padding: 0 16px; height: 40px;">
+                        <!-- 11 Bokeh Shapes mapping -->
+                        <span style="font-size: 12px; font-weight: 600; color: #444; margin-right: 8px;">BOKEH STYLE</span>
+                        <div class="lb-shape-btn" data-shape="1" style="width:32px; height:32px; border-radius:50%; border:2px solid #4285F4; display:flex; align-items:center; justify-content:center; color:#4285F4; font-weight:bold; cursor:pointer;">1</div>
+                        <div class="lb-shape-btn" data-shape="2" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">2</div>
+                        <div class="lb-shape-btn" data-shape="3" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">3</div>
+                        <div class="lb-shape-btn" data-shape="4" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">4</div>
+                        <div class="lb-shape-btn" data-shape="5" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">5</div>
+                        <div class="lb-shape-btn" data-shape="6" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">6</div>
+                        <div class="lb-shape-btn" data-shape="7" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">7</div>
+                        <div class="lb-shape-btn" data-shape="8" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">8</div>
+                        <div class="lb-shape-btn" data-shape="9" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">9</div>
+                        <div class="lb-shape-btn" data-shape="10" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">10</div>
+                        <div class="lb-shape-btn" data-shape="11" style="width:32px; height:32px; border-radius:50%; border:2px solid transparent; display:flex; align-items:center; justify-content:center; color:#777; cursor:pointer;">11</div>
+                    </div>
+                </div>
+
+                <!-- Lens Blur Bottom Bar -->
+                <div id="lens-blur-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" title="Cancel" id="lb-cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Elliptical/Linear Toggle -->
+                    <button class="icon-btn" id="lb-toggle-mask" title="Focus Shape" style="color: #777;">
+                         <svg id="lb-icon-elliptical" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+                         <svg id="lb-icon-linear" style="display:none;" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="8" x2="22" y2="8"/><line x1="2" y1="16" x2="22" y2="16"/></svg>
+                    </button>
+                    <!-- Settings -->
+                    <button class="icon-btn" id="lb-manual" title="Blur Settings" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                    <!-- Bokeh Shapes -->
+                    <button class="icon-btn" id="lb-toggle-bokeh" title="Bokeh Styles" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H6a3 3 0 0 0-3 3v6z"/><path d="M16 4a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h2a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3h-2z"/></svg></button>
+                    <!-- Apply -->
+                    <button class="icon-btn" title="Apply" id="lb-apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- Vignette Popup -->
+                <div class="tool-popup" id="vignette-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item" data-filter="vigOuter">
+                            <span class="popup-label">Outer Brightness</span>
+                            <span class="popup-value">-50</span>
+                        </div>
+                        <div class="popup-item active" data-filter="vigInner">
+                            <span class="popup-label">Inner Brightness</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                </div>
+
+                <!-- Vignette Bottom Bar -->
+                <div id="vignette-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" title="Cancel" id="vig-cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Settings -->
+                    <button class="icon-btn" id="vig-manual" title="Vignette Settings" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                    <!-- Apply -->
+                    <button class="icon-btn" title="Apply" id="vig-apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- Text Opacity Popup -->
+                <div class="tool-popup" id="text-opacity-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="txtOpac">
+                            <span class="popup-label">Opacity</span>
+                            <span class="popup-value">100</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                </div>
+
+                <!-- Text Color Palette -->
+                <div id="text-color-popup" style="display: none; position: absolute; bottom: 50px; left: 0; right: 0; background: rgba(255,255,255,0.95); z-index: 99; padding: 12px; border-top: 1px solid #ccc; overflow-x: auto; white-space: nowrap;">
+                    <button id="txt-invert-btn" style="padding:4px 12px; margin-right:12px; border:1px solid #aaa; border-radius:16px; background:#f0f0f0; cursor:pointer;">Invert</button>
+                    <div style="display: inline-flex; gap: 8px; align-items: center;">
+                        <div class="txt-color-btn" data-color="#ffffff" style="width:24px; height:24px; border-radius:50%; background:#ffffff; border:2px solid #aaa; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#000000" style="width:24px; height:24px; border-radius:50%; background:#000000; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#f44336" style="width:24px; height:24px; border-radius:50%; background:#f44336; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#e91e63" style="width:24px; height:24px; border-radius:50%; background:#e91e63; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#9c27b0" style="width:24px; height:24px; border-radius:50%; background:#9c27b0; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#3f51b5" style="width:24px; height:24px; border-radius:50%; background:#3f51b5; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#2196f3" style="width:24px; height:24px; border-radius:50%; background:#2196f3; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#00bcd4" style="width:24px; height:24px; border-radius:50%; background:#00bcd4; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#4caf50" style="width:24px; height:24px; border-radius:50%; background:#4caf50; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#ffeb3b" style="width:24px; height:24px; border-radius:50%; background:#ffeb3b; cursor:pointer;"></div>
+                        <div class="txt-color-btn" data-color="#ff9800" style="width:24px; height:24px; border-radius:50%; background:#ff9800; cursor:pointer;"></div>
+                    </div>
+                </div>
+
+                <!-- Text Style Presets -->
+                <div id="text-style-popup" style="display: none; position: absolute; bottom: 50px; left: 0; right: 0; background: rgba(255,255,255,0.95); z-index: 99; padding: 12px; border-top: 1px solid #ccc; overflow-x: auto; white-space: nowrap;">
+                    <div style="display:flex; align-items:center; gap:10px; padding:0 16px 12px;">
+                        <span style="font-size: 12px; font-weight: 600; color: #444;">FONT</span>
+                        <input id="txt-custom-font" type="text" placeholder="Custom font family" style="flex:1; min-width:200px; padding:8px 10px; border:1px solid #ccc; border-radius:8px; font-size:13px; outline:none;">
+                    </div>
+                    <div style="display: inline-flex; gap: 16px; align-items: center; padding: 0 16px;">
+                        <span style="font-size: 12px; font-weight: 600; color: #444; margin-right: 8px;">STYLE</span>
+                        <div class="txt-style-btn" data-style="N1" style="font-family:'Oswald'; font-size:18px; padding:4px 8px; border:2px solid #aaa; border-radius:4px; cursor:pointer;">N1</div>
+                        <div class="txt-style-btn" data-style="N2" style="font-family:'Inter'; font-weight:600; font-size:18px; padding:4px 8px; border:2px solid transparent; cursor:pointer;">N2</div>
+                        <div class="txt-style-btn" data-style="L1" style="font-family:'Oswald'; border-top:2px solid #333; border-bottom:2px solid #333; font-size:18px; padding:2px 8px; border-left:2px solid transparent; border-right:2px solid transparent; cursor:pointer;">L1</div>
+                        <div class="txt-style-btn" data-style="H1" style="font-family:'Caveat'; font-size:20px; padding:4px 8px; border:2px solid transparent; cursor:pointer;">H1</div>
+                        <div class="txt-style-btn" data-style="B1" style="width:36px; height:36px; background:#444; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Oswald'; font-size:14px; cursor:pointer;">B1</div>
+                        <div class="txt-style-btn" data-style="B2" style="width:36px; height:36px; background:#444; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Inter'; font-weight:600; font-size:14px; cursor:pointer;">B2</div>
+                    </div>
+                </div>
+
+                <!-- Text Bottom Bar -->
+                <div id="text-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" title="Cancel" id="txt-cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Color -->
+                    <button class="icon-btn" id="txt-toggle-color" title="Color" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg></button>
+                    <!-- Opacity -->
+                    <button class="icon-btn" id="txt-toggle-opacity" title="Opacity" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg></button>
+                    <!-- Style -->
+                    <button class="icon-btn" id="txt-toggle-style" title="Style" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg></button>
+                    <!-- Apply -->
+                    <button class="icon-btn" title="Apply" id="txt-apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- Frames Width Popup -->
+                <div class="tool-popup" id="frames-width-popup" style="display: none;">
+                    <div class="popup-drag-handle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="1.5"/><circle cx="15" cy="8" r="1.5"/><circle cx="9" cy="16" r="1.5"/><circle cx="15" cy="16" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/></svg>
+                    </div>
+                    <div class="popup-list">
+                        <div class="popup-item active" data-filter="frameWidth">
+                            <span class="popup-label">Frame Width</span>
+                            <span class="popup-value">0</span>
+                        </div>
+                    </div>
+                    <div class="popup-footer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                </div>
+
+                <!-- Frames Style Presets -->
+                <div id="frames-style-popup" style="display: none; position: absolute; bottom: 50px; left: 0; right: 0; background: rgba(255,255,255,0.95); z-index: 99; padding: 12px; border-top: 1px solid #ccc; overflow-x: auto; white-space: nowrap;">
+                    <div style="display: inline-flex; gap: 16px; align-items: center; padding: 0 16px;">
+                        <span style="font-size: 12px; font-weight: 600; color: #444; margin-right: 8px;">FRAME</span>
+                        <div class="frm-style-btn" data-style="1" style="width:32px; height:32px; background:#fff; border:4px solid #fff; box-shadow:0 0 0 1px #ccc; display:flex; align-items:center; justify-content:center; color:#444; font-size:12px; cursor:pointer;">1</div>
+                        <div class="frm-style-btn" data-style="2" style="width:32px; height:32px; background:#fff; border:4px solid #000; display:flex; align-items:center; justify-content:center; color:#000; font-size:12px; cursor:pointer;">2</div>
+                        <div class="frm-style-btn" data-style="6" style="width:32px; height:32px; background:#fff; border:4px solid #fff; border-radius:3px; box-shadow:0 0 0 1px #ccc; border-style:dashed; display:flex; align-items:center; justify-content:center; color:#444; font-size:12px; cursor:pointer;">6</div>
+                        <div class="frm-style-btn" data-style="7" style="width:32px; height:32px; background:#fff; border:4px solid #fff; box-shadow:inset 0 0 4px rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; color:#444; font-size:12px; cursor:pointer;">7</div>
+                        <div class="frm-style-btn" data-style="13" style="width:32px; height:32px; background:#fff; border-top:2px solid #ddd; border-left:2px solid #ddd; border-right:2px solid #ddd; border-bottom:8px solid #ddd; display:flex; align-items:center; justify-content:center; color:#444; font-size:12px; cursor:pointer;">13</div>
+                        <div class="frm-style-btn" data-style="14" style="width:32px; height:32px; background:#fff; border-top:2px solid #bbb; border-left:2px solid #bbb; border-right:2px solid #bbb; border-bottom:8px solid #bbb; display:flex; align-items:center; justify-content:center; color:#222; font-size:12px; cursor:pointer;">14</div>
+                        <div class="frm-style-btn" data-style="19" style="width:32px; height:32px; background:#fff; border:4px solid #3e2723; display:flex; align-items:center; justify-content:center; color:#3e2723; font-size:12px; cursor:pointer;">19</div>
+                        <div class="frm-style-btn" data-style="20" style="width:32px; height:32px; background:#fff; border:2px solid rgba(255,255,255,0.5); outline:2px solid #795548; display:flex; align-items:center; justify-content:center; color:#795548; font-size:12px; cursor:pointer;">20</div>
+                    </div>
+                </div>
+
+                <!-- Frames Bottom Bar -->
+                <div id="frames-bottom-bar" style="display: none; position: absolute; bottom: 0; left: 0; right: 0; height: 50px; background-color: #fff; z-index: 100; align-items: center; justify-content: space-around; border-top: 1px solid #ccc; color: #555;">
+                    <button class="icon-btn" title="Cancel" id="frm-cancel" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                    <!-- Settings -->
+                    <button class="icon-btn" id="frm-manual" title="Width Settings" style="color: #4285F4;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></button>
+                    <!-- Style -->
+                    <button class="icon-btn" id="frm-toggle-style" title="Style" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg></button>
+                    <!-- Apply -->
+                    <button class="icon-btn" title="Apply" id="frm-apply" style="color: #777;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></button>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════ -->
+                <!-- BRUSH TOOL UI                                          -->
+                <!-- ═══════════════════════════════════════════════════════ -->
+
+                <!-- Cursor preview canvas (transparent, mouse-events blocked) -->
+                <canvas id="brush-cursor-canvas" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:15;"></canvas>
+
+                <!-- Floating badge (shows active brush type + strength) -->
+                <div id="brush-badge" style="display:none; position:absolute; top:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); color:#fff; border-radius:4px; padding:6px 16px; z-index:20; align-items:center; gap:10px; pointer-events:none; transition: opacity 0.3s;">
+                    <span id="brush-badge-type" style="font-size:13px; font-weight:500; letter-spacing:0.3px;">Dodge &amp; Burn</span>
+                    <span style="color:rgba(255,255,255,0.5); font-size:11px;">|</span>
+                    <span style="font-size:13px; font-weight:500; letter-spacing:0.3px;">Intensity: <span id="brush-badge-strength" data-brush-strength="display" style="font-weight:700;">+50</span></span>
+                    <span style="color:rgba(255,255,255,0.5); font-size:11px;">|</span>
+                    <span style="font-size:13px; font-weight:500; letter-spacing:0.3px;">Range: <span id="brush-size-value" style="font-weight:700;">40</span></span>
+                </div>
+
+                <!-- Brush Bottom Bar -->
+                <div id="brush-bottom-bar" style="display:none; position:absolute; bottom:0; left:0; right:0; z-index:100; flex-direction:column; background-color:#fff; border-top:1px solid #ccc; color:#555;">
+
+                    <!-- Top Row: Brush type selectors -->
+                    <div style="display:flex; justify-content:space-around; width:100%; padding:8px 0; border-bottom:1px solid #eee;">
+                        <button class="icon-btn brush-type-btn active" data-type="dodgeBurn" style="flex-direction: column; font-size: 10px; color: #4285F4; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2A10 10 0 002 12h20A10 10 0 0012 2v20z" fill="currentColor"/></svg>
+                            <span>Dodge &amp; Burn</span>
+                        </button>
+                        <button class="icon-btn brush-type-btn" data-type="exposure" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20z"/></svg>
+                            <span>Exposure</span>
+                        </button>
+                        <button class="icon-btn brush-type-btn" data-type="temperature" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20 M12 10h4 M12 14h6 M12 6h6"/></svg>
+                            <span>Temperature</span>
+                        </button>
+                        <button class="icon-btn brush-type-btn" data-type="saturation" style="flex-direction: column; font-size: 10px; color: #777; gap: 4px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                            <span>Saturation</span>
+                        </button>
+                    </div>
+
+                    <!-- Bottom Row: Actions -->
+                    <div style="display:flex; justify-content:space-between; width:100%; padding:12px 16px; align-items:center; box-sizing:border-box;">
+                        <button id="brush-cancel" class="icon-btn" title="Cancel" style="color:#777;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+
+                        <div style="display:flex; align-items:center; gap:32px;">
+                            <button id="brush-erase" class="icon-btn brush-action-btn" title="Eraser" style="color:#777;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16l11-11 7 7-1 8z"/><path d="M6 11l7 7"/></svg>
+                            </button>
+                            <button id="brush-view" class="icon-btn brush-action-btn" title="View Mask" style="color:#777;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                        </div>
+
+                        <button id="brush-apply" class="icon-btn" title="Apply" style="color:#777;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Healing Cursor Preview Canvas -->
+                <canvas id="healing-cursor-canvas" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:15;"></canvas>
+
+                <!-- Healing Floating Badge -->
+                <div id="healing-badge" style="display:none; position:absolute; top:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.6); color:#fff; border-radius:4px; padding:6px 16px; z-index:20; align-items:center; gap:10px; pointer-events:none; transition: opacity 0.3s;">
+                    <span style="font-size:13px; font-weight:500; letter-spacing:0.3px;">Brush Size: <span id="healing-size-value" style="font-weight:700;">40</span></span>
+                </div>
+
+                <!-- Healing Bottom Bar -->
+                <div id="healing-bottom-bar" style="display:none; position:absolute; bottom:0; left:0; right:0; z-index:100; flex-direction:column; background-color:#fff; border-top:1px solid #ccc; color:#555;">
+                    <div style="display:flex; justify-content:space-between; width:100%; padding:12px 16px; align-items:center; box-sizing:border-box;">
+                        <button id="healing-cancel" class="icon-btn" title="Cancel" style="color:#777;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+
+                        <div style="display:flex; align-items:center; gap:32px;">
+                            <button id="healing-undo" class="icon-btn" title="Undo" style="color:#777; opacity: 0.5; pointer-events: none;">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
+                            </button>
+                        </div>
+
+                        <button id="healing-apply" class="icon-btn" title="Apply" style="color:#777;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </button>
+                    </div>
+                </div>
+
+            </main>
+
+            <!-- Right Sidebar Area -->
+            <aside class="sidebar">
+                <!-- Tabs -->
+                <nav class="sidebar-tabs">
+                    <button class="tab-btn" data-tab="looks">LOOKS</button>
+                    <button class="tab-btn active" data-tab="tools">TOOLS</button>
+                    <button class="tab-btn" data-tab="export">EXPORT</button>
+                </nav>
+
+                <div class="sidebar-content" id="looks-content" data-tab-panel="looks" style="display: none;">
+                    <h3 class="section-title">LOOKS</h3>
+                    <div class="workflow-panel">
+                        <div class="workflow-hero">
+                            <div class="workflow-kicker">Entry Point</div>
+                            <h4>Start with a one-tap mood.</h4>
+                            <p>Apply reusable styles instantly, save your own favorite recipes, and share compact look codes in this browser build.</p>
+                        </div>
+
+                        <section class="workflow-block">
+                            <div class="workflow-row">
+                                <span class="workflow-subtitle">Default Looks</span>
+                                <span class="workflow-meta">Portrait, Smooth, Pop, Accentuate</span>
+                            </div>
+                            <div class="looks-grid" id="looks-default-grid"></div>
+                        </section>
+
+                        <section class="workflow-block">
+                            <div class="workflow-row">
+                                <span class="workflow-subtitle">Custom Looks</span>
+                                <button class="workflow-action compact" id="looks-save-current">+ Save Current</button>
+                            </div>
+                            <div class="looks-list" id="looks-custom-list"></div>
+                        </section>
+
+                        <section class="workflow-block">
+                            <div class="workflow-row">
+                                <span class="workflow-subtitle">QR Looks</span>
+                                <span class="workflow-meta">Code-based fallback</span>
+                            </div>
+                            <div class="workflow-actions">
+                                <button class="workflow-action" id="looks-copy-code">Create Look Code</button>
+                                <button class="workflow-action" id="looks-load-code">Load Look Code</button>
+                            </div>
+                            <p class="workflow-note">This web build uses compact look codes instead of camera QR scanning.</p>
+                        </section>
+
+                        <div class="workflow-status" id="looks-status">Open an image, then tap a look to jump-start the edit.</div>
+                    </div>
+                </div>
+
+                <!-- Tools Content -->
+                <!-- Tools Content -->
+                <div class="sidebar-content" id="tools-content" data-tab-panel="tools">
+                    <h3 class="section-title">TOOLS</h3>
+                    <div class="tools-grid">
+                        <!-- Group 1: Basics -->
+                        <div class="tool-item" id="btn-tune-image">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M1 14h6m2-6h6m2 8h6"/></svg></div>
+                            <span>Tune Image</span>
+                        </div>
+                        <div class="tool-item" id="btn-details">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21L3 6h18L12 21z"/></svg></div>
+                            <span>Details</span>
+                        </div>
+                        <div class="tool-item" id="btn-curves">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v18h18M7 16c2.5-4.5 6-8.5 12-10"/><circle cx="7" cy="16" r="1.5" fill="currentColor"/><circle cx="19" cy="6" r="1.5" fill="currentColor"/><circle cx="13" cy="10" r="1.5" fill="currentColor"/></svg></div>
+                            <span>Curves</span>
+                        </div>
+                        <div class="tool-item" id="btn-wb">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 21l18-18"/><text x="5" y="12" font-size="8" font-family="sans-serif" stroke="none" fill="currentColor" font-weight="bold">W</text><text x="14" y="20" font-size="8" font-family="sans-serif" stroke="none" fill="currentColor" font-weight="bold">B</text></svg></div>
+                            <span>White Balance</span>
+                        </div>
+
+                        <!-- Group 2: Geometry -->
+                        <div class="tool-item" id="btn-crop">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2v16h16M2 6h16v16"/></svg></div>
+                            <span>Crop</span>
+                        </div>
+                        <div class="tool-item" id="btn-rotate">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9h-3m3 0V9"/></svg></div>
+                            <span>Rotate</span>
+                        </div>
+                        <div class="tool-item" id="btn-perspective" style="display: none;">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l16-2v16l-16-2V6z"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="20" cy="4" r="1.5" fill="currentColor"/><circle cx="20" cy="20" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/><path d="M9 5.5v13m6-14v15M4 11h16M4 14h16"/></svg></div>
+                            <span>Perspective</span>
+                        </div>
+                        <div class="tool-item" id="btn-expand" style="display: none;">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9V3h6M15 3h6v6M3 15v6h6M15 21h6v-6"/></svg></div>
+                            <span>Expand</span>
+                        </div>
+
+                        <!-- Group 3: Selective & Filters -->
+                        <div class="tool-item" id="btn-selective">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg></div>
+                            <span>Selective</span>
+                        </div>
+                        <div class="tool-item" id="btn-brush">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 4l2 2-9 9-4 1 1-4 9-9z"/><path d="M14 8l2 2"/></svg></div>
+                            <span>Brush</span>
+                        </div>
+                        <div class="tool-item" id="btn-healing">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 19L19 5m0 0v6M19 5h-6M5 5l14 14m0 0v-6M19 19h-6"/></svg></div>
+                            <span>Healing</span>
+                        </div>
+                        <div class="tool-item" id="btn-glamour-glow">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L6 8h12L12 2zM6 8v8l6 6 6-6V8H6z"/><circle cx="12" cy="14" r="2.5" fill="currentColor"/><path d="M4 4h1M2 12h2M4 20h1M20 4h1M22 12h2M20 20h1"/></svg></div>
+                            <span>Glamour Glow</span>
+                        </div>
+
+                        <div class="tool-item" id="btn-grainy-film">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="16" cy="8" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="8" cy="16" r="1.5" fill="currentColor"/><circle cx="16" cy="16" r="1.5" fill="currentColor"/></svg></div>
+                            <span>Grainy Film</span>
+                        </div>
+                        <div class="tool-item" id="btn-bw">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M21 3L3 21" fill="currentColor"/></svg></div>
+                            <span>Black & White</span>
+                        </div>
+                        <div class="tool-item" id="btn-lens-blur">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" stroke-dasharray="2 2"/></svg></div>
+                            <span>Lens Blur</span>
+                        </div>
+                        <div class="tool-item" id="btn-vignette">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="12" cy="12" r="6" fill="currentColor"/></svg></div>
+                            <span>Vignette</span>
+                        </div>
+
+                        <!-- Group 4: Annotations -->
+                        <div class="tool-item" id="btn-text">
+                            <div class="tool-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7V4h16v3M12 4v16M9 20h6"/></svg></div>
+                            <span>Text</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tool Controls Overlay (Hidden by default) -->
+                <div class="tool-controls-overlay" id="tool-controls" style="display: none;">
+                    <div class="tool-top-bar">
+                        <button class="icon-btn tool-cancel">✕</button>
+                        <div class="tool-title">Tune Image</div>
+                        <button class="icon-btn tool-apply">✓</button>
+                    </div>
+                    <div class="tool-sliders-container" id="tool-sliders">
+                        <!-- Sliders injected here -->
+                    </div>
+                </div>
+
+                <div class="sidebar-content" id="export-content" data-tab-panel="export" style="display: none;">
+                    <h3 class="section-title">EXPORT</h3>
+                    <div class="workflow-panel">
+                        <div class="workflow-hero export-hero">
+                            <div class="workflow-kicker">Exit Point</div>
+                            <h4>Choose how the final image leaves the editor.</h4>
+                            <p>Editable saves keep your stack reusable here, while exports flatten everything for universal compatibility.</p>
+                        </div>
+
+                        <section class="workflow-block">
+                            <button class="export-card" id="export-save">
+                                <span class="export-card-title">Save</span>
+                                <span class="export-card-copy">Downloads an editable Webseed project JSON you can reopen in this app later.</span>
+                            </button>
+                            <button class="export-card" id="export-save-copy">
+                                <span class="export-card-title">Save a Copy</span>
+                                <span class="export-card-copy">Creates both an editable project file and a flattened JPG copy.</span>
+                            </button>
+                            <button class="export-card" id="export-flatten">
+                                <span class="export-card-title">Export</span>
+                                <span class="export-card-copy">Creates a permanent flattened JPG that works everywhere.</span>
+                            </button>
+                            <button class="export-card" id="export-flatten-as">
+                                <span class="export-card-title">Export as...</span>
+                                <span class="export-card-copy">Lets you choose the destination filename when the browser supports it.</span>
+                            </button>
+                            <button class="export-card" id="export-share">
+                                <span class="export-card-title">Share</span>
+                                <span class="export-card-copy">Opens the system share sheet when available, using the flattened image.</span>
+                            </button>
+                        </section>
+
+                        <div class="workflow-status" id="export-status">Export is ready once an image is loaded.</div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+    
+    <script async src="https://docs.opencv.org/4.x/opencv.js" type="text/javascript"></script>
+    <script src="js/state.js"></script>
+    <script src="js/opencv_process.js"></script>
+    <script src="js/filters/raw.js"></script>
+    <script src="js/filters/tune.js"></script>
+    <script src="js/filters/selective.js"></script>
+    <script src="js/filters/details.js"></script>
+    <script src="js/filters/whitebalance.js"></script>
+    <script src="js/filters/curves.js"></script>
+    <script src="js/filters/crop.js"></script>
+    <script src="js/filters/rotate.js"></script>
+    <script src="js/geometry.js"></script>
+    <script src="js/filters/brush.js"></script>
+    <script src="js/filters/healing.js"></script>
+    <script src="js/filters/glamour.js"></script>
+    <script src="js/filters/grainyfilm.js"></script>
+    <script src="js/filters/blackandwhite.js"></script>
+    <script src="js/filters/lensblur.js"></script>
+    <script src="js/filters/vignette.js"></script>
+    <script src="js/filters/text.js"></script>
+    <script src="js/filters/frames.js"></script>
+    <script src="js/canvas.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/export.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
