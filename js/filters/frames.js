@@ -127,14 +127,46 @@
 
             ctx.globalCompositeOperation = 'source-over';
             
-            // Draw bevel strokes inside
             ctx.strokeStyle = isDark ? '#1a1412' : '#ffffff';
             ctx.lineWidth = 4;
             ctx.strokeRect(marginX-2, marginY-2, bw+4, bh+4);
-            
             ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.15)';
             ctx.lineWidth = 1;
             ctx.strokeRect(marginX-6, marginY-6, bw+12, bh+12);
+        } else if (styleId === 3) {
+            // Phase C: thin double white
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0,0,width,height);
+            ctx.globalCompositeOperation='destination-out';
+            ctx.fillRect(marginX, marginY, width-marginX*2, height-marginY*2);
+            ctx.globalCompositeOperation='source-over';
+            ctx.strokeStyle='rgba(0,0,0,0.18)'; ctx.lineWidth=1;
+            ctx.strokeRect(marginX+6, marginY+6, width-marginX*2-12, height-marginY*2-12);
+        } else if (styleId === 4) {
+            // Phase C: thin black
+            ctx.fillStyle='#0a0a0f';
+            ctx.fillRect(0,0,width,height);
+            ctx.globalCompositeOperation='destination-out';
+            ctx.fillRect(marginX, marginY, width-marginX*2, height-marginY*2);
+        } else if (styleId === 8) {
+            // Phase C: warm canvas bevel + subtle vignette
+            ctx.fillStyle='#f5f0eb';
+            ctx.fillRect(0,0,width,height);
+            ctx.globalCompositeOperation='destination-out';
+            ctx.fillRect(marginX, marginY, width-marginX*2, height-marginY*2);
+            ctx.globalCompositeOperation='source-over';
+            ctx.strokeStyle='rgba(141,110,83,0.18)'; ctx.lineWidth=8;
+            ctx.strokeRect(marginX-4, marginY-4, width-marginX*2+8, height-marginY*2+8);
+        } else if (styleId === 10) {
+            // Phase C: dark film border
+            ctx.fillStyle='#0e0e0e';
+            ctx.fillRect(0,0,width,height);
+            ctx.globalCompositeOperation='destination-out';
+            ctx.fillRect(marginX, marginY, width-marginX*2, height-marginY*2);
+            ctx.globalCompositeOperation='source-over';
+            ctx.strokeStyle='#ffffff'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+            ctx.strokeRect(marginX-8, marginY-8, width-marginX*2+16, height-marginY*2+16);
+            ctx.setLineDash([]);
         }
 
         ctx.restore();

@@ -1,0 +1,14 @@
+{
+  "name": "webseed",
+  "version": "1.1.0",
+  "description": "WebSeed — browser-based image editor — modernized",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8"
+  }
+}

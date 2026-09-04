@@ -29,16 +29,35 @@
         const brush = window.App.state.brush;
         cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
         const r = brush.size;
+        const hardness = typeof brush.hardness==='number'? brush.hardness : 65;
+        // outer ring
         cursorCtx.beginPath();
         cursorCtx.arc(x, y, r, 0, Math.PI * 2);
         cursorCtx.strokeStyle = brush.erasing ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)';
         cursorCtx.lineWidth = 1.5;
         cursorCtx.stroke();
+        // hardness inner ring (softness)
+        const innerR = r * (0.22 + (hardness/100)*0.55);
+        cursorCtx.beginPath();
+        cursorCtx.arc(x, y, innerR, 0, Math.PI * 2);
+        cursorCtx.strokeStyle = brush.erasing ? 'rgba(255,80,80,0.42)' : 'rgba(255,255,255,0.32)';
+        cursorCtx.lineWidth = 1;
+        cursorCtx.setLineDash([3,3]);
+        cursorCtx.stroke();
+        cursorCtx.setLineDash([]);
         // inner dot
         cursorCtx.beginPath();
         cursorCtx.arc(x, y, 2, 0, Math.PI * 2);
         cursorCtx.fillStyle = brush.erasing ? 'rgba(255,80,80,0.9)' : 'rgba(255,255,255,0.85)';
         cursorCtx.fill();
+        // flow badge near cursor
+        if(brush.flow < 75){
+            cursorCtx.fillStyle='rgba(0,0,0,0.58)';
+            cursorCtx.fillRect(x+ r+6, y-8, 28, 14);
+            cursorCtx.fillStyle='#fff';
+            cursorCtx.font='10px Inter';
+            cursorCtx.fillText(Math.round(brush.flow)+'%', x+ r+8, y+2);
+        }
     }
 
     function clearCursor() {
@@ -67,15 +86,17 @@
         const h = brush.maskHeight;
         const r = Math.max(1, brush.size);
         const rSq = r * r;
-        const sigma = r / 2.5;
-        const twoSigSq = 2 * sigma * sigma;
+        const hardness = typeof brush.hardness==='number'? brush.hardness : 65;
+        const flow = typeof brush.flow==='number'? brush.flow : 85;
+        // hardness 0 soft -> sigma large (0.60*r), 100 hard -> sigma small (0.18*r)
+        const sigma = r * (0.60 - (hardness/100)*0.42);
+        const twoSigSq = 2 * Math.max(1.2, sigma) * Math.max(1.2, sigma);
+        const flowNorm = Math.max(0.1, Math.min(1, flow/100));
 
-        // Strength: positive = effect forward, negative = reversed (burn/cool/desaturate)
         let targetStrength;
         if (brush.erasing) {
             targetStrength = 0;
         } else {
-            // dodgeBurn and exposure: positive = dodge/brighten, negative button sets negative
             targetStrength = brush.strength;
         }
 
@@ -90,24 +111,34 @@
                 const dy = py - canvasY;
                 const dSq = dx * dx + dy * dy;
                 if (dSq > rSq) continue;
-                
-                const dist = Math.sqrt(dSq);
-                // Linear Falloff: 1.0 at center, 0.0 at radius edge
-                const normDist = dist / r;
-                const w_brush = Math.max(0, 1.0 - normDist);
-                
+                // Hardness-controlled falloff: Gaussian
+                let w_brush = Math.exp(-dSq / twoSigSq);
+                // For very hard brush, sharpen edge
+                if(hardness > 82){
+                    // hard edge: keep core solid
+                    const norm = Math.sqrt(dSq)/r;
+                    w_brush = norm < 0.72 ? 1 : w_brush * 0.55;
+                }
+                // flow scales build-up
+                w_brush *= flowNorm;
+                if(w_brush < 0.008) continue;
                 const idx = py * w + px;
                 if (brush.erasing) {
-                    mask[idx] = mask[idx] * (1 - w_brush); // fade towards 0
+                    mask[idx] = mask[idx] * (1 - w_brush);
                 } else {
-                    // Set intensity based on falloff. 
-                    // This ensures the center point ALWAYS reflects the selected targetStrength,
-                    // and prevents over-accumulation while maintaining a natural taper.
                     const val = targetStrength * w_brush;
-                    if (targetStrength >= 0) {
-                        mask[idx] = Math.max(mask[idx], val);
+                    // flow-based lerp vs max
+                    if(flow < 92){
+                        // build up gradually
+                        const cur = mask[idx];
+                        const target = val;
+                        // lerp towards target by w_brush
+                        const blended = cur + (target - cur) * w_brush * 0.85;
+                        if (targetStrength >= 0) mask[idx] = Math.max(cur, blended);
+                        else mask[idx] = Math.min(cur, blended);
                     } else {
-                        mask[idx] = Math.min(mask[idx], val);
+                        if (targetStrength >= 0) mask[idx] = Math.max(mask[idx], val);
+                        else mask[idx] = Math.min(mask[idx], val);
                     }
                 }
             }
@@ -251,6 +282,31 @@
                 window.App.canvas.scheduleRender();
             });
         }
+        // ── Hardness / Flow sliders (Phase B) ───────────────────────
+        const hardnessEl = document.getElementById('brush-hardness');
+        const hardnessVal = document.getElementById('brush-hardness-val');
+        const flowEl = document.getElementById('brush-flow');
+        const flowVal = document.getElementById('brush-flow-val');
+        const syncHardnessFlow = ()=>{
+            const b=window.App.state.brush;
+            if(hardnessEl){ hardnessEl.value=b.hardness; if(hardnessVal) hardnessVal.textContent=b.hardness; }
+            if(flowEl){ flowEl.value=b.flow; if(flowVal) flowVal.textContent=b.flow+'%'; }
+        };
+        if(hardnessEl){
+            hardnessEl.addEventListener('input', (e)=>{
+                window.App.state.brush.hardness = parseInt(e.target.value,10);
+                if(hardnessVal) hardnessVal.textContent=e.target.value;
+                showBadgeBriefly();
+            });
+            hardnessEl.addEventListener('change', syncHardnessFlow);
+        }
+        if(flowEl){
+            flowEl.addEventListener('input', (e)=>{
+                window.App.state.brush.flow = parseInt(e.target.value,10);
+                if(flowVal) flowVal.textContent=e.target.value+'%';
+                showBadgeBriefly();
+            });
+        }
 
         // ── Mouse/Touch Painting on Canvas ───────────────────────────
         const container = document.querySelector('.canvas-container');
@@ -315,30 +371,32 @@
         // Hide cursor when leaving the page
         document.addEventListener('mouseleave', clearCursor);
 
-        // ── Scroll Wheel: Strength & Size ────────────────────────────
-        // Scroll on left half of container → change strength (intensity)
-        // Scroll on right half of container → change brush size (range)
+        // ── Scroll Wheel: Strength & Size + Hardness/Flow (Phase B) ────────────────────────────
         container.addEventListener('wheel', (e) => {
             if (window.App.toolManager.activeToolId !== 'btn-brush') return;
             e.preventDefault();
             const brush = window.App.state.brush;
             const delta = e.deltaY < 0 ? 1 : -1;
-
+            if(e.altKey){
+                brush.hardness = Math.max(0, Math.min(100, (brush.hardness||65) + delta*4));
+                syncHardnessFlow(); refreshUI(); showBadgeBriefly(); return;
+            }
+            if(e.shiftKey){
+                brush.flow = Math.max(10, Math.min(100, (brush.flow||85) + delta*4));
+                syncHardnessFlow(); refreshUI(); showBadgeBriefly(); return;
+            }
             const clientX = e.clientX;
             const rect = window.App.canvas.el.getBoundingClientRect();
-            // Check if pointer is on the left half of the image
             const isLeft = clientX < (rect.left + rect.width / 2);
-
             if (!isLeft) {
-                // Right side: Range (size)
                 brush.size = Math.max(5, Math.min(200, brush.size + delta * 3));
             } else {
-                // Left side: Intensity (strength) preserves sign direction
                 const sign = brush.strength < 0 ? -1 : 1;
                 let abs = Math.abs(brush.strength);
                 abs = Math.max(1, Math.min(100, abs + delta * 2));
                 brush.strength = sign * abs;
             }
+            syncHardnessFlow();
             refreshUI();
             showBadgeBriefly();
         }, { passive: false });
@@ -356,6 +414,7 @@
                 strengthDisp.style.color = brush.erasing ? '#ff6b6b' : col;
             }
             if (sizeDisp) sizeDisp.textContent = brush.size;
+            syncHardnessFlow();
 
             // Type buttons active state
             document.querySelectorAll('.brush-type-btn').forEach(btn => {

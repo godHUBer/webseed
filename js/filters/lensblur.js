@@ -22,7 +22,12 @@
         return { r, g, b };
     }
 
-    function isInsideBokehShape(shapeId, nx, ny) {
+    function isInsideBokehShape(shapeId, nx, ny, rotRad) {
+        if(rotRad){
+            const c=Math.cos(rotRad), sn=Math.sin(rotRad);
+            const rx = nx*c - ny*sn, ry = nx*sn + ny*c;
+            nx=rx; ny=ry;
+        }
         const r2 = (nx * nx) + (ny * ny);
 
         if (shapeId === 1) return r2 <= 1;
@@ -58,10 +63,12 @@
         return (Math.abs(nx) + (Math.abs(ny) * 0.75)) <= 1;
     }
 
-    function buildBokehSamples(shapeId, radius) {
+    function buildBokehSamples(shapeId, radius, rotation) {
         const roundedRadius = Math.max(1, Math.round(radius));
-        const cacheKey = `${shapeId}:${roundedRadius}`;
+        const rotKey = Math.round((rotation||0)/5)*5;
+        const cacheKey = `${shapeId}:${roundedRadius}:${rotKey}`;
         if (sampleCache.has(cacheKey)) return sampleCache.get(cacheKey);
+        const rotRad = (rotation||0)*Math.PI/180;
 
         const candidates = [];
 
@@ -69,7 +76,7 @@
             for (let dx = -roundedRadius; dx <= roundedRadius; dx++) {
                 const nx = dx / roundedRadius;
                 const ny = dy / roundedRadius;
-                if (!isInsideBokehShape(shapeId, nx, ny)) continue;
+                if (!isInsideBokehShape(shapeId, nx, ny, rotRad)) continue;
 
                 const distance = Math.sqrt((nx * nx) + (ny * ny));
                 const edgeWeight = 0.7 + ((1 - Math.min(1, distance)) * 0.3);
@@ -109,8 +116,8 @@
         return hash.toString(16);
     }
 
-    function bokehBlur(data, width, height, radius, shapeId) {
-        const cacheKey = `${width}|${height}|${Math.round(radius)}|${shapeId}|${buildSourceSignature(data, width, height)}`;
+    function bokehBlur(data, width, height, radius, shapeId, rotation) {
+        const cacheKey = `${width}|${height}|${Math.round(radius)}|${shapeId}|${Math.round((rotation||0)/5)}|${buildSourceSignature(data, width, height)}`;
         if (blurCacheKey === cacheKey && blurCacheValue) {
             return blurCacheValue;
         }
@@ -122,7 +129,7 @@
             g: new Uint8ClampedArray(pixelCount),
             b: new Uint8ClampedArray(pixelCount)
         };
-        const samples = buildBokehSamples(shapeId, radius);
+        const samples = buildBokehSamples(shapeId, radius, rotation);
 
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
@@ -161,6 +168,12 @@
 
     function getLensBlurProtection(lensBlur, dx, dy) {
         const anchor = lensBlur.anchor || {};
+        const rot = (anchor.rotation||0) * Math.PI/180;
+        if(rot){
+            const c=Math.cos(-rot), s=Math.sin(-rot);
+            const rx = dx*c - dy*s, ry = dx*s + dy*c;
+            dx=rx; dy=ry;
+        }
         const focusX = Math.max(0.08, anchor.focusScaleX || anchor.focusScale || 0.24);
         const focusY = Math.max(0.08, anchor.focusScaleY || anchor.focusScale || 0.24);
         const feather = getFeatherRadius(lensBlur);
@@ -195,10 +208,11 @@
         if (strength <= 0) return;
 
         const radius = 1 + ((strength / 100) * 26);
-        const blurred = bokehBlur(data, width, height, radius, lensBlur.bokehShape);
+        const rotation = lensBlur.bokehRotation || 0;
+        const blurred = bokehBlur(data, width, height, radius, lensBlur.bokehShape, rotation);
         const centerX = lensBlur.anchor.x;
         const centerY = lensBlur.anchor.y;
-
+        const vigStrength = (lensBlur.vignetteStrength||0)/100; // -1..1
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const dx = (x / width) - centerX;
@@ -206,10 +220,16 @@
                 const protection = getLensBlurProtection(lensBlur, dx, dy);
                 const dataIndex = (y * width + x) * 4;
                 const blurIndex = (y * width) + x;
-
-                data[dataIndex] = (data[dataIndex] * protection) + (blurred.r[blurIndex] * (1 - protection));
-                data[dataIndex + 1] = (data[dataIndex + 1] * protection) + (blurred.g[blurIndex] * (1 - protection));
-                data[dataIndex + 2] = (data[dataIndex + 2] * protection) + (blurred.b[blurIndex] * (1 - protection));
+                let r = (data[dataIndex] * protection) + (blurred.r[blurIndex] * (1 - protection));
+                let g = (data[dataIndex + 1] * protection) + (blurred.g[blurIndex] * (1 - protection));
+                let b = (data[dataIndex + 2] * protection) + (blurred.b[blurIndex] * (1 - protection));
+                if(vigStrength!==0){
+                    const vign = 1 - protection; // 0 in focus, 1 outside
+                    const w = Math.abs(vigStrength) * vign * vign; // quadratic falloff
+                    if(vigStrength<0){ r*=1-w*0.55; g*=1-w*0.55; b*=1-w*0.55; }
+                    else { r=r+(255-r)*w*0.45; g=g+(255-g)*w*0.45; b=b+(255-b)*w*0.45; }
+                }
+                data[dataIndex]=r; data[dataIndex+1]=g; data[dataIndex+2]=b;
             }
         }
     };

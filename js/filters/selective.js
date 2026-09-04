@@ -24,23 +24,49 @@
         'structure': 'St'
     };
 
+    // --- Lab helpers (Phase B: true U-Point in Lab) ---
+    function srgbToLinear(c){ c/=255; return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+    function rgbToXyz(r,g,b){
+        const R=srgbToLinear(r), G=srgbToLinear(g), B=srgbToLinear(b);
+        // D65
+        const X = R*0.4124 + G*0.3576 + B*0.1805;
+        const Y = R*0.2126 + G*0.7152 + B*0.0722;
+        const Z = R*0.0193 + G*0.1192 + B*0.9505;
+        return [X,Y,Z];
+    }
+    function xyzToLab(X,Y,Z){
+        const refX=0.95047, refY=1, refZ=1.08883;
+        let x=X/refX, y=Y/refY, z=Z/refZ;
+        const eps=0.008856, kappa=903.3;
+        const f=(t)=> t>eps ? Math.cbrt(t) : (kappa*t+16)/116;
+        const fx=f(x), fy=f(y), fz=f(z);
+        const L = 116*fy -16;
+        const a = 500*(fx - fy);
+        const b2 = 200*(fy - fz);
+        return [L,a,b2];
+    }
+    function rgbToLab(r,g,b){ const [X,Y,Z]=rgbToXyz(r,g,b); return xyzToLab(X,Y,Z); }
+    function deltaE(lab1, lab2){
+        const dl=lab1[0]-lab2[0], da=lab1[1]-lab2[1], db=lab1[2]-lab2[2];
+        return Math.sqrt(dl*dl + da*da + db*db);
+    }
+
     function generateNodeId() {
         return 'selective-node-' + Date.now() + Math.random().toString(36).substr(2, 5);
     }
 
     function captureColorAt(fx, fy) {
-        if (!window.App.canvas || !window.App.canvas.ctx) return {r:128, g:128, b:128};
+        if (!window.App.canvas || !window.App.canvas.ctx) return {r:128, g:128, b:128, lab:[50,0,0]};
         let w = window.App.canvas.el.width;
         let h = window.App.canvas.el.height;
         let px = Math.floor(fx * w);
         let py = Math.floor(fy * h);
         px = Math.max(0, Math.min(w - 1, px));
         py = Math.max(0, Math.min(h - 1, py));
-        
-        // Ensure rendering is up to date before grabbing
         const ctx = window.App.canvas.ctx;
         const data = ctx.getImageData(px, py, 1, 1).data;
-        return {r: data[0], g: data[1], b: data[2]};
+        const lab = rgbToLab(data[0], data[1], data[2]);
+        return {r: data[0], g: data[1], b: data[2], lab};
     }
 
     function initSelectiveUI() {
@@ -194,11 +220,16 @@
                 let fy = (clientY - cvsRect.top) / cvsRect.height;
                 
                 if (fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1) {
+                    if(sel.points.length >= (sel.maxPoints||8)){
+                        if(window.App.ui) window.App.ui.showToast('Max 8 points — delete one to add','error');
+                        addMode=false; addBtn.style.background='#fff';
+                        return;
+                    }
                     let color = captureColorAt(fx, fy);
                     let newPoint = {
                         id: generateNodeId(),
                         x: fx, y: fy,
-                        radius: 0.25, // default 25% screen radius
+                        radius: 0.25,
                         color: color,
                         filters: { brightness: 0, contrast: 0, saturation: 0, structure: 0 }
                     };
@@ -362,15 +393,21 @@
         let sel = window.App.state.selective;
         if (!sel || !sel.points || sel.points.length === 0) return;
 
-        // Pre-calculate localized bounding boxes to avoid O(N * W * H) lag
+        const threshold = typeof sel.threshold==='number'? sel.threshold : 32;
+        const feather = typeof sel.feather==='number'? sel.feather : 48;
+        // spatial sigma scales with feather: 0..100 -> 0.45..0.95 of radius
+        const spatialSigmaFactor = 0.42 + (feather/100)*0.42;
+
         let processedPoints = sel.points.map(pt => {
             let pxc = pt.x * width;
             let pyc = pt.y * height;
-            // Radius scales dynamically with maximum screen size footprint
             let radiusPx = pt.radius * Math.max(width, height);
-            
+            // ensure lab cached
+            let lab = pt.color.lab || rgbToLab(pt.color.r, pt.color.g, pt.color.b);
+            if(!pt.color.lab) pt.color.lab = lab;
             return {
                 ...pt,
+                lab,
                 pxc, pyc, radiusPx, radiusPxSq: radiusPx * radiusPx,
                 minX: Math.max(0, Math.floor(pxc - radiusPx)),
                 maxX: Math.min(width, Math.ceil(pxc + radiusPx)),
@@ -379,68 +416,52 @@
             };
         });
 
-        // Maximum euclidean RGB color distance to be considered "similar" structure
-        const COLOR_TOLERANCE = 100; 
-
+        // For performance, we process at 1x but with early exits; Lab per pixel is okay for 720p preview
         for (let pt of processedPoints) {
             let bLevel = pt.filters.brightness / 100.0;
             let cLevel = pt.filters.contrast / 100.0;
             let sLevel = pt.filters.saturation / 100.0;
             let stLevel = pt.filters.structure / 100.0;
-            
-            let showMask = sel.showMask && sel.activePointId === pt.id; 
-
-            let baseR = pt.color.r;
-            let baseG = pt.color.g;
-            let baseB = pt.color.b;
+            let showMask = sel.showMask && sel.activePointId === pt.id;
+            let baseLab = pt.lab;
+            // color sigma derived from threshold: Lab ΔE sigma
+            const colorSigma = Math.max(8, Math.min(45, threshold * 0.95));
+            const spatialSigma = Math.max(6, pt.radiusPx * spatialSigmaFactor);
+            const twoSpatial = 2*spatialSigma*spatialSigma;
+            const twoColor = 2*colorSigma*colorSigma;
 
             for (let y = pt.minY; y < pt.maxY; y++) {
                 for (let x = pt.minX; x < pt.maxX; x++) {
                     let dx = x - pt.pxc;
                     let dy = y - pt.pyc;
                     let distSq = dx*dx + dy*dy;
-                    
-                    if (distSq > pt.radiusPxSq) continue; // Outside primary bounds
-
-                    // Smooth Gaussian-like Falloffs
-                    let geoWeight = Math.exp(-distSq / (2 * (pt.radiusPx / 2.5) * (pt.radiusPx / 2.5)));
-
+                    if (distSq > pt.radiusPxSq) continue;
+                    let geoWeight = Math.exp(-distSq / twoSpatial);
+                    if (geoWeight < 0.012) continue;
                     let i = (y * width + x) * 4;
-                    let R = data[i];
-                    let G = data[i+1];
-                    let B = data[i+2];
-
-                    let colorDistSq = (R - baseR)*(R - baseR) + (G - baseG)*(G - baseG) + (B - baseB)*(B - baseB);
-                    let colorSigma = 30; // tighter structure match
-                    let colorWeight = Math.exp(-colorDistSq / (2 * colorSigma * colorSigma));
-                    
+                    let R = data[i], G = data[i+1], B = data[i+2];
+                    // Lab color distance — true U-Point
+                    const lab = rgbToLab(R,G,B);
+                    const de = deltaE(baseLab, lab);
+                    const colorWeight = Math.exp(-(de*de) / twoColor);
                     let weight = geoWeight * colorWeight;
                     if (weight <= 0.01) continue;
-
-                    // Red Pinch Reveal Overlay
+                    // feather softens edge: weight pow
+                    if(feather < 45) weight = Math.pow(weight, 1.18);
                     if (showMask) {
                         data[i]   = Math.min(255, R + (255 - R) * weight * 0.85);
                         data[i+1] = G * (1 - weight * 0.7);
                         data[i+2] = B * (1 - weight * 0.7);
                         continue; 
                     }
-
-                    // Native Filter Fast Adjustments (approximations of main tune engine)
                     let actR = R, actG = G, actB = B;
-
-                    if (bLevel !== 0) {
-                        actR += 255 * bLevel;
-                        actG += 255 * bLevel;
-                        actB += 255 * bLevel;
-                    }
-
+                    if (bLevel !== 0) { actR += 255 * bLevel; actG += 255 * bLevel; actB += 255 * bLevel; }
                     if (cLevel !== 0) {
                         const amount = Math.tan((cLevel + 1) * Math.PI / 4);
                         actR = ((actR / 255 - 0.5) * amount + 0.5) * 255;
                         actG = ((actG / 255 - 0.5) * amount + 0.5) * 255;
                         actB = ((actB / 255 - 0.5) * amount + 0.5) * 255;
                     }
-
                     if (sLevel !== 0) {
                         let max = Math.max(actR, actG, actB);
                         let min = Math.min(actR, actG, actB);
@@ -449,16 +470,12 @@
                         actG = actG + (actG - l) * sLevel;
                         actB = actB + (actB - l) * sLevel;
                     }
-                    
                     if (stLevel !== 0) {
-                        // High-pass micro-contrast spatial proxy
                         let luma = 0.299 * R + 0.587 * G + 0.114 * B;
                         actR += (actR - luma) * stLevel;
                         actG += (actG - luma) * stLevel;
                         actB += (actB - luma) * stLevel;
                     }
-
-                    // Composite Application
                     data[i]   = Math.max(0, Math.min(255, R + (actR - R) * weight));
                     data[i+1] = Math.max(0, Math.min(255, G + (actG - G) * weight));
                     data[i+2] = Math.max(0, Math.min(255, B + (actB - B) * weight));

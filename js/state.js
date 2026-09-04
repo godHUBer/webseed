@@ -17,7 +17,28 @@ window.App.state = {
     canvasConfig: {
         width: 0,
         height: 0,
-        previewScale: 1
+        previewScale: 1,
+        userZoom: 1,
+        baseFitScale: 1,
+        panX: 0,
+        panY: 0
+    },
+    perspective: {
+        enabled: false,
+        corners: [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}], // normalized 0..1
+        gridVisible: true,
+        tiltX: 0,
+        tiltY: 0,
+        rotate: 0
+    },
+    expand: {
+        enabled: false,
+        mode: 'smart', // 'smart'|'white'|'black'|'reflect'
+        pad: { top:0, right:0, bottom:0, left:0 } // fractions 0..0.4
+    },
+    uiFlags: {
+        compareOriginal: false,
+        opencvReady: false
     },
     filters: {
         rawExposure: 0,
@@ -54,28 +75,34 @@ window.App.state = {
         enabled: false,
         blurStrength: 50,
         transition: 50,
-        vignetteStrength: 0,
+        vignetteStrength: 0, // -100..100 darken/brighten bg like real lens (Phase C)
         bokehShape: 1, // 1 to 11
+        bokehRotation: 0, // 0..360 (Phase C)
         maskMode: 'elliptical', // 'elliptical' | 'linear'
-        anchor: { 
-            x: 0.5, 
-            y: 0.5, 
+        anchor: {
+            x: 0.5,
+            y: 0.5,
             focusScaleX: 0.24,
             focusScaleY: 0.24,
-            rotation: 0 // Used mainly for 'linear'
+            rotation: 0
         }
     },
     selective: {
-        points: [], // { id, x, y, radius, color: {r,g,b}, filters: { brightness: 0, contrast: 0, saturation: 0, structure: 0 } }
+        points: [], // { id, x, y, radius, color: {r,g,b, lab}, filters: { brightness: 0, contrast: 0, saturation: 0, structure: 0 } }
         activePointId: null,
         activeParam: 'brightness',
-        showMask: false
+        showMask: false,
+        threshold: 32, // Lab ΔE sigma (Phase B)
+        feather: 48, // spatial feather %
+        maxPoints: 8
     },
     vignette: {
         enabled: false,
         innerBrightness: 0,
         outerBrightness: -50,
-        anchor: { x: 0.5, y: 0.5, radius: 0.4 }
+        feather: 45, // 0..100 softness (Phase C)
+        tint: null, // optional warm tint color string e.g. '#d8a86a' (Phase C)
+        anchor: { x: 0.5, y: 0.5, radius: 0.4, radiusX: null, radiusY: null }
     },
     text: {
         enabled: false,
@@ -87,7 +114,12 @@ window.App.state = {
         customFontFamily: "",
         opacity: 100,
         inverted: false,
-        styleId: "N1"
+        styleId: "N1",
+        align: "center", // Phase C: left|center|right
+        letterSpacing: 0, // 0..30
+        lineSpacing: 1.15,
+        shadow: false,
+        outline: false
     },
     frames: {
         enabled: false,
@@ -95,10 +127,16 @@ window.App.state = {
         frameWidth: 0
     },
     curvesLUT: new Uint8Array(256).map((_, i) => i), // Default 1:1 mapping
+    curvesMix: 100, // 0..100 blend of curve vs original (Phase B)
+    curvesChannel: 'rgb', // 'rgb'|'r'|'g'|'b'|'luminance' (Phase B)
     brush: {
         activeType: 'dodgeBurn',   // 'dodgeBurn' | 'exposure' | 'temperature' | 'saturation'
         strength: 50,               // 1–100 (sign is per-type)
         size: 40,                   // brush radius in canvas pixels
+        hardness: 65,               // 0..100 (Phase B) -> sigma 0.7..4.2
+        flow: 85,                   // 10..100 (Phase B) opacity build-up
+        edgeAware: false,           // guided filter on mask (Phase B)
+        spacing: 18,                // % of radius for dab spacing (Phase B)
         erasing: false,
         showMask: false,
         // Float32Array per type — values -100..+100, lazy-initialized when tool opens
@@ -113,6 +151,9 @@ window.App.state = {
     },
     healing: {
         size: 40,
+        hardness: 72, // 0..100
+        mode: 'heal', // 'heal'|'clone' Phase B
+        source: null, // {x,y} for clone stamp offset
         patches: [], // Array of { maskData: ImageData, srcData: ImageData, dstData: ImageData } or similar offscreen buffers
         overlayCanvas: null // Rendered composite of applied healing
     }
@@ -178,7 +219,9 @@ window.App.applyLookSnapshot = function (snapshot) {
         lensBlur: window.App.mergeDeep(window.App.defaultLookSnapshot.lensBlur, snapshot && snapshot.lensBlur),
         vignette: window.App.mergeDeep(window.App.defaultLookSnapshot.vignette, snapshot && snapshot.vignette),
         frames: window.App.mergeDeep(window.App.defaultLookSnapshot.frames, snapshot && snapshot.frames),
-        curvesLUT: Array.isArray(snapshot && snapshot.curvesLUT) ? snapshot.curvesLUT.slice() : window.App.defaultLookSnapshot.curvesLUT.slice()
+        curvesLUT: Array.isArray(snapshot && snapshot.curvesLUT) ? snapshot.curvesLUT.slice() : window.App.defaultLookSnapshot.curvesLUT.slice(),
+        curvesMix: typeof snapshot?.curvesMix==='number'? snapshot.curvesMix : window.App.defaultLookSnapshot.curvesMix,
+        curvesChannel: snapshot?.curvesChannel || window.App.defaultLookSnapshot.curvesChannel
     };
 
     window.App.state.filters = merged.filters;
@@ -186,6 +229,8 @@ window.App.applyLookSnapshot = function (snapshot) {
     window.App.state.vignette = merged.vignette;
     window.App.state.frames = merged.frames;
     window.App.state.curvesLUT = new Uint8Array(merged.curvesLUT);
+    window.App.state.curvesMix = merged.curvesMix;
+    window.App.state.curvesChannel = merged.curvesChannel;
 
     if (window.App.normalizeLensBlurState) window.App.normalizeLensBlurState();
     if (window.App.normalizeVignetteState) window.App.normalizeVignetteState();
@@ -202,7 +247,9 @@ window.App.applyProjectSnapshot = function (snapshot) {
         vignette: window.App.mergeDeep(window.App.defaultProjectSnapshot.vignette, snapshot && snapshot.vignette),
         text: window.App.mergeDeep(window.App.defaultProjectSnapshot.text, snapshot && snapshot.text),
         frames: window.App.mergeDeep(window.App.defaultProjectSnapshot.frames, snapshot && snapshot.frames),
-        curvesLUT: Array.isArray(snapshot && snapshot.curvesLUT) ? snapshot.curvesLUT.slice() : window.App.defaultProjectSnapshot.curvesLUT.slice()
+        curvesLUT: Array.isArray(snapshot && snapshot.curvesLUT) ? snapshot.curvesLUT.slice() : window.App.defaultProjectSnapshot.curvesLUT.slice(),
+        curvesMix: typeof snapshot?.curvesMix==='number'? snapshot.curvesMix : window.App.defaultProjectSnapshot.curvesMix,
+        curvesChannel: snapshot?.curvesChannel || window.App.defaultProjectSnapshot.curvesChannel
     };
 
     window.App.state.geometry = merged.geometry;
@@ -213,6 +260,8 @@ window.App.applyProjectSnapshot = function (snapshot) {
     window.App.state.text = merged.text;
     window.App.state.frames = merged.frames;
     window.App.state.curvesLUT = new Uint8Array(merged.curvesLUT);
+    window.App.state.curvesMix = merged.curvesMix;
+    window.App.state.curvesChannel = merged.curvesChannel;
 
     if (window.App.normalizeLensBlurState) window.App.normalizeLensBlurState();
     if (window.App.normalizeVignetteState) window.App.normalizeVignetteState();
@@ -224,11 +273,14 @@ window.App.cloneBrushState = function (brush) {
     ['dodgeBurn', 'exposure', 'temperature', 'saturation'].forEach((type) => {
         mask[type] = source.mask[type] ? new Float32Array(source.mask[type]) : null;
     });
-
     return {
         activeType: source.activeType,
         strength: source.strength,
         size: source.size,
+        hardness: source.hardness,
+        flow: source.flow,
+        edgeAware: source.edgeAware,
+        spacing: source.spacing,
         erasing: source.erasing,
         showMask: source.showMask,
         mask,
@@ -241,6 +293,9 @@ window.App.cloneHealingState = function (healing) {
     const source = healing || window.App.state.healing;
     return {
         size: source.size,
+        hardness: source.hardness,
+        mode: source.mode,
+        source: source.source ? { x: source.source.x, y: source.source.y } : null,
         patches: source.patches ? source.patches.slice() : [],
         overlayCanvas: source.overlayCanvas || null
     };
@@ -259,6 +314,10 @@ window.App.getRuntimeSnapshot = function () {
         },
         filters: window.App.deepClone(window.App.state.filters),
         curvesLUT: new Uint8Array(window.App.state.curvesLUT),
+        curvesMix: window.App.state.curvesMix,
+        curvesChannel: window.App.state.curvesChannel,
+        perspective: window.App.deepClone(window.App.state.perspective),
+        expand: window.App.deepClone(window.App.state.expand),
         selective: window.App.deepClone(window.App.state.selective),
         lensBlur: window.App.deepClone(window.App.state.lensBlur),
         vignette: window.App.deepClone(window.App.state.vignette),
@@ -275,6 +334,10 @@ window.App.applyRuntimeSnapshot = function (snapshot) {
     window.App.state.geometry = window.App.deepClone(snapshot.geometry);
     window.App.state.filters = window.App.deepClone(snapshot.filters);
     window.App.state.curvesLUT = new Uint8Array(snapshot.curvesLUT || []);
+    window.App.state.curvesMix = typeof snapshot.curvesMix==='number'? snapshot.curvesMix : 100;
+    window.App.state.curvesChannel = snapshot.curvesChannel || 'rgb';
+    if(snapshot.perspective) window.App.state.perspective = window.App.deepClone(snapshot.perspective);
+    if(snapshot.expand) window.App.state.expand = window.App.deepClone(snapshot.expand);
     window.App.state.selective = window.App.deepClone(snapshot.selective);
     window.App.state.lensBlur = window.App.deepClone(snapshot.lensBlur);
     window.App.state.vignette = window.App.deepClone(snapshot.vignette);
@@ -295,6 +358,10 @@ window.App.historyFieldModes = {
     geometry: 'diff',
     filters: 'diff',
     curvesLUT: 'replace',
+    curvesMix: 'diff',
+    curvesChannel: 'diff',
+    perspective: 'diff',
+    expand: 'diff',
     selective: 'replace',
     lensBlur: 'diff',
     vignette: 'diff',
@@ -406,48 +473,49 @@ window.App.applyHistoryPatch = function (targetValue, patchValue) {
 window.App.normalizeLensBlurState = function () {
     const lensBlur = window.App.state && window.App.state.lensBlur;
     if (!lensBlur) return null;
-
     lensBlur.maskMode = 'elliptical';
     lensBlur.enabled = !!lensBlur.enabled;
     lensBlur.blurStrength = typeof lensBlur.blurStrength === 'number' ? lensBlur.blurStrength : 50;
     lensBlur.transition = typeof lensBlur.transition === 'number' ? lensBlur.transition : 50;
+    lensBlur.vignetteStrength = typeof lensBlur.vignetteStrength === 'number' ? lensBlur.vignetteStrength : 0;
     lensBlur.bokehShape = typeof lensBlur.bokehShape === 'number' ? lensBlur.bokehShape : 1;
-
+    lensBlur.bokehRotation = typeof lensBlur.bokehRotation === 'number' ? lensBlur.bokehRotation : 0;
     lensBlur.anchor = lensBlur.anchor || {};
     lensBlur.anchor.x = typeof lensBlur.anchor.x === 'number' ? lensBlur.anchor.x : 0.5;
     lensBlur.anchor.y = typeof lensBlur.anchor.y === 'number' ? lensBlur.anchor.y : 0.5;
-
     const legacyFocus = typeof lensBlur.anchor.focusScale === 'number' ? lensBlur.anchor.focusScale : 0.24;
     lensBlur.anchor.focusScaleX = typeof lensBlur.anchor.focusScaleX === 'number' ? lensBlur.anchor.focusScaleX : legacyFocus;
     lensBlur.anchor.focusScaleY = typeof lensBlur.anchor.focusScaleY === 'number' ? lensBlur.anchor.focusScaleY : legacyFocus;
-    lensBlur.anchor.rotation = 0;
-
+    lensBlur.anchor.rotation = typeof lensBlur.anchor.rotation === 'number' ? lensBlur.anchor.rotation : 0;
     lensBlur.anchor.x = Math.max(0, Math.min(1, lensBlur.anchor.x));
     lensBlur.anchor.y = Math.max(0, Math.min(1, lensBlur.anchor.y));
     lensBlur.anchor.focusScaleX = Math.max(0.08, Math.min(0.45, lensBlur.anchor.focusScaleX));
     lensBlur.anchor.focusScaleY = Math.max(0.08, Math.min(0.45, lensBlur.anchor.focusScaleY));
-
+    lensBlur.bokehRotation = ((lensBlur.bokehRotation % 360)+360)%360;
+    lensBlur.vignetteStrength = Math.max(-100, Math.min(100, lensBlur.vignetteStrength));
     return lensBlur;
 };
 
 window.App.normalizeVignetteState = function () {
     const vignette = window.App.state && window.App.state.vignette;
     if (!vignette) return null;
-
     vignette.enabled = !!vignette.enabled;
     vignette.innerBrightness = typeof vignette.innerBrightness === 'number' ? vignette.innerBrightness : 0;
     vignette.outerBrightness = typeof vignette.outerBrightness === 'number' ? vignette.outerBrightness : -50;
+    vignette.feather = typeof vignette.feather === 'number' ? vignette.feather : 45;
+    vignette.tint = vignette.tint || null;
     vignette.anchor = vignette.anchor || {};
     vignette.anchor.x = typeof vignette.anchor.x === 'number' ? vignette.anchor.x : 0.5;
     vignette.anchor.y = typeof vignette.anchor.y === 'number' ? vignette.anchor.y : 0.5;
     vignette.anchor.radius = typeof vignette.anchor.radius === 'number' ? vignette.anchor.radius : 0.4;
-
+    if(vignette.anchor.radiusX!=null && typeof vignette.anchor.radiusX!=='number') vignette.anchor.radiusX=null;
+    if(vignette.anchor.radiusY!=null && typeof vignette.anchor.radiusY!=='number') vignette.anchor.radiusY=null;
     vignette.anchor.x = Math.max(0, Math.min(1, vignette.anchor.x));
     vignette.anchor.y = Math.max(0, Math.min(1, vignette.anchor.y));
     vignette.anchor.radius = Math.max(0.08, Math.min(1.2, vignette.anchor.radius));
+    vignette.feather = Math.max(0, Math.min(100, vignette.feather));
     vignette.innerBrightness = Math.max(-100, Math.min(100, vignette.innerBrightness));
     vignette.outerBrightness = Math.max(-100, Math.min(100, vignette.outerBrightness));
-
     return vignette;
 };
 
@@ -549,7 +617,7 @@ window.App.historyManager = {
             window.App.ui.activeLookId = null;
         }
         if (window.App.canvas && window.App.state.originalImage) {
-            window.App.canvas.fitToContainer();
+            window.App.canvas.fitToContainer(true);
             window.App.canvas.scheduleRender();
         }
         this.syncUI();
@@ -646,6 +714,10 @@ window.App.toolManager = {
             filters: { ...window.App.state.filters },
             geometry: JSON.parse(JSON.stringify(window.App.state.geometry)),
             curvesLUT: new Uint8Array(window.App.state.curvesLUT),
+            curvesMix: window.App.state.curvesMix,
+            curvesChannel: window.App.state.curvesChannel,
+        curvesMix: window.App.state.curvesMix,
+        curvesChannel: window.App.state.curvesChannel,
             selective: JSON.parse(JSON.stringify(window.App.state.selective)),
             lensBlur: JSON.parse(JSON.stringify(window.App.state.lensBlur)),
             vignette: JSON.parse(JSON.stringify(window.App.state.vignette)),
@@ -680,6 +752,10 @@ window.App.toolManager = {
             geometry: JSON.parse(JSON.stringify(this.sessionState.geometry)),
             filters: JSON.parse(JSON.stringify(this.sessionState.filters)),
             curvesLUT: new Uint8Array(this.sessionState.curvesLUT),
+            curvesMix: this.sessionState.curvesMix,
+            curvesChannel: this.sessionState.curvesChannel,
+            perspective: JSON.parse(JSON.stringify(this.sessionState.perspective)),
+            expand: JSON.parse(JSON.stringify(this.sessionState.expand)),
             selective: JSON.parse(JSON.stringify(this.sessionState.selective)),
             lensBlur: JSON.parse(JSON.stringify(this.sessionState.lensBlur)),
             vignette: JSON.parse(JSON.stringify(this.sessionState.vignette)),
@@ -714,6 +790,10 @@ window.App.toolManager = {
         window.App.state.filters = { ...this.sessionState.filters };
         window.App.state.geometry = JSON.parse(JSON.stringify(this.sessionState.geometry));
         window.App.state.curvesLUT.set(this.sessionState.curvesLUT);
+        window.App.state.curvesMix = this.sessionState.curvesMix;
+        window.App.state.curvesChannel = this.sessionState.curvesChannel;
+        window.App.state.perspective = JSON.parse(JSON.stringify(this.sessionState.perspective));
+        window.App.state.expand = JSON.parse(JSON.stringify(this.sessionState.expand));
         window.App.state.selective = JSON.parse(JSON.stringify(this.sessionState.selective));
         window.App.state.lensBlur = JSON.parse(JSON.stringify(this.sessionState.lensBlur));
         window.App.state.vignette = JSON.parse(JSON.stringify(this.sessionState.vignette));
@@ -727,6 +807,10 @@ window.App.toolManager = {
             brushState.activeType = sb.activeType;
             brushState.strength = sb.strength;
             brushState.size = sb.size;
+            brushState.hardness = sb.hardness;
+            brushState.flow = sb.flow;
+            brushState.edgeAware = sb.edgeAware;
+            brushState.spacing = sb.spacing;
             brushState.erasing = sb.erasing;
             brushState.showMask = sb.showMask;
             brushState.maskWidth = sb.maskWidth;
@@ -739,6 +823,9 @@ window.App.toolManager = {
         if (this.sessionState.healing) {
             window.App.state.healing.patches = [...this.sessionState.healing.patches];
             window.App.state.healing.size = this.sessionState.healing.size;
+            window.App.state.healing.hardness = this.sessionState.healing.hardness;
+            window.App.state.healing.mode = this.sessionState.healing.mode;
+            window.App.state.healing.source = this.sessionState.healing.source ? { x: this.sessionState.healing.source.x, y: this.sessionState.healing.source.y } : null;
             // Notify healing UI to rebuild the overlay canvas
             if (window.App.filtersLogic && window.App.filtersLogic.rebuildHealingOverlay) {
                 window.App.filtersLogic.rebuildHealingOverlay();
