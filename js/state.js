@@ -711,34 +711,20 @@ window.App.toolManager = {
             brushMaskSnapshot[type] = brushState.mask[type] ? new Float32Array(brushState.mask[type]) : null;
         });
         this.sessionState = {
-            filters: { ...window.App.state.filters },
-            geometry: JSON.parse(JSON.stringify(window.App.state.geometry)),
+            filters: window.App.deepClone(window.App.state.filters),
+            geometry: window.App.deepClone(window.App.state.geometry),
             curvesLUT: new Uint8Array(window.App.state.curvesLUT),
             curvesMix: window.App.state.curvesMix,
             curvesChannel: window.App.state.curvesChannel,
-        curvesMix: window.App.state.curvesMix,
-        curvesChannel: window.App.state.curvesChannel,
-            selective: JSON.parse(JSON.stringify(window.App.state.selective)),
-            lensBlur: JSON.parse(JSON.stringify(window.App.state.lensBlur)),
-            vignette: JSON.parse(JSON.stringify(window.App.state.vignette)),
-            text: JSON.parse(JSON.stringify(window.App.state.text)),
-            frames: JSON.parse(JSON.stringify(window.App.state.frames)),
-            brush: {
-                activeType: brushState.activeType,
-                strength: brushState.strength,
-                size: brushState.size,
-                erasing: brushState.erasing,
-                showMask: brushState.showMask,
-                mask: brushMaskSnapshot,
-                maskWidth: brushState.maskWidth,
-                maskHeight: brushState.maskHeight
-            },
-            healing: {
-                // deep copy patch references
-                patches: [...window.App.state.healing.patches],
-                size: window.App.state.healing.size
-                // overlayCanvas is rebuilt or preserved via patching
-            },
+            perspective: window.App.deepClone(window.App.state.perspective),
+            expand: window.App.deepClone(window.App.state.expand),
+            selective: window.App.deepClone(window.App.state.selective),
+            lensBlur: window.App.deepClone(window.App.state.lensBlur),
+            vignette: window.App.deepClone(window.App.state.vignette),
+            text: window.App.deepClone(window.App.state.text),
+            frames: window.App.deepClone(window.App.state.frames),
+            brush: window.App.cloneBrushState(brushState),
+            healing: window.App.cloneHealingState(window.App.state.healing),
             uiCallback: uiCallback
         };
 
@@ -749,18 +735,18 @@ window.App.toolManager = {
         if (!this.activeToolId) return;
         const toolId = this.activeToolId;
         const beforeSnapshot = this.sessionState ? {
-            geometry: JSON.parse(JSON.stringify(this.sessionState.geometry)),
-            filters: JSON.parse(JSON.stringify(this.sessionState.filters)),
+            geometry: window.App.deepClone(this.sessionState.geometry),
+            filters: window.App.deepClone(this.sessionState.filters),
             curvesLUT: new Uint8Array(this.sessionState.curvesLUT),
             curvesMix: this.sessionState.curvesMix,
             curvesChannel: this.sessionState.curvesChannel,
-            perspective: JSON.parse(JSON.stringify(this.sessionState.perspective)),
-            expand: JSON.parse(JSON.stringify(this.sessionState.expand)),
-            selective: JSON.parse(JSON.stringify(this.sessionState.selective)),
-            lensBlur: JSON.parse(JSON.stringify(this.sessionState.lensBlur)),
-            vignette: JSON.parse(JSON.stringify(this.sessionState.vignette)),
-            text: JSON.parse(JSON.stringify(this.sessionState.text)),
-            frames: JSON.parse(JSON.stringify(this.sessionState.frames)),
+            perspective: window.App.deepClone(this.sessionState.perspective),
+            expand: window.App.deepClone(this.sessionState.expand),
+            selective: window.App.deepClone(this.sessionState.selective),
+            lensBlur: window.App.deepClone(this.sessionState.lensBlur),
+            vignette: window.App.deepClone(this.sessionState.vignette),
+            text: window.App.deepClone(this.sessionState.text),
+            frames: window.App.deepClone(this.sessionState.frames),
             brush: window.App.cloneBrushState(this.sessionState.brush),
             healing: window.App.cloneHealingState(this.sessionState.healing)
         } : null;
@@ -787,45 +773,26 @@ window.App.toolManager = {
         if (!this.activeToolId || !this.sessionState) return;
         
         // Revert live state to snapshot
-        window.App.state.filters = { ...this.sessionState.filters };
-        window.App.state.geometry = JSON.parse(JSON.stringify(this.sessionState.geometry));
+        window.App.state.filters = window.App.deepClone(this.sessionState.filters);
+        window.App.state.geometry = window.App.deepClone(this.sessionState.geometry);
         window.App.state.curvesLUT.set(this.sessionState.curvesLUT);
         window.App.state.curvesMix = this.sessionState.curvesMix;
         window.App.state.curvesChannel = this.sessionState.curvesChannel;
-        window.App.state.perspective = JSON.parse(JSON.stringify(this.sessionState.perspective));
-        window.App.state.expand = JSON.parse(JSON.stringify(this.sessionState.expand));
-        window.App.state.selective = JSON.parse(JSON.stringify(this.sessionState.selective));
-        window.App.state.lensBlur = JSON.parse(JSON.stringify(this.sessionState.lensBlur));
-        window.App.state.vignette = JSON.parse(JSON.stringify(this.sessionState.vignette));
-        window.App.state.text = JSON.parse(JSON.stringify(this.sessionState.text));
-        window.App.state.frames = JSON.parse(JSON.stringify(this.sessionState.frames));
+        if(this.sessionState.perspective) window.App.state.perspective = window.App.deepClone(this.sessionState.perspective);
+        if(this.sessionState.expand) window.App.state.expand = window.App.deepClone(this.sessionState.expand);
+        window.App.state.selective = window.App.deepClone(this.sessionState.selective);
+        window.App.state.lensBlur = window.App.deepClone(this.sessionState.lensBlur);
+        window.App.state.vignette = window.App.deepClone(this.sessionState.vignette);
+        window.App.state.text = window.App.deepClone(this.sessionState.text);
+        window.App.state.frames = window.App.deepClone(this.sessionState.frames);
 
         // Restore brush mask snapshot
         if (this.sessionState.brush) {
-            const sb = this.sessionState.brush;
-            const brushState = window.App.state.brush;
-            brushState.activeType = sb.activeType;
-            brushState.strength = sb.strength;
-            brushState.size = sb.size;
-            brushState.hardness = sb.hardness;
-            brushState.flow = sb.flow;
-            brushState.edgeAware = sb.edgeAware;
-            brushState.spacing = sb.spacing;
-            brushState.erasing = sb.erasing;
-            brushState.showMask = sb.showMask;
-            brushState.maskWidth = sb.maskWidth;
-            brushState.maskHeight = sb.maskHeight;
-            ['dodgeBurn', 'exposure', 'temperature', 'saturation'].forEach(type => {
-                brushState.mask[type] = sb.mask[type] ? new Float32Array(sb.mask[type]) : null;
-            });
+            window.App.state.brush = window.App.cloneBrushState(this.sessionState.brush);
         }
 
         if (this.sessionState.healing) {
-            window.App.state.healing.patches = [...this.sessionState.healing.patches];
-            window.App.state.healing.size = this.sessionState.healing.size;
-            window.App.state.healing.hardness = this.sessionState.healing.hardness;
-            window.App.state.healing.mode = this.sessionState.healing.mode;
-            window.App.state.healing.source = this.sessionState.healing.source ? { x: this.sessionState.healing.source.x, y: this.sessionState.healing.source.y } : null;
+            window.App.state.healing = window.App.cloneHealingState(this.sessionState.healing);
             // Notify healing UI to rebuild the overlay canvas
             if (window.App.filtersLogic && window.App.filtersLogic.rebuildHealingOverlay) {
                 window.App.filtersLogic.rebuildHealingOverlay();
