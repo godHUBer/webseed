@@ -49,7 +49,7 @@
         };
 
         toolBtn.addEventListener('click', () => {
-            if (window.App.toolManager.activeToolId === 'btn-healing') return;
+            if (window.App.toolManager.activeToolId === 'btn-healing') { window.App.toolManager.cancelTool(); return; }
             window.App.toolManager.openTool('btn-healing', uiCallbackObj);
         });
 

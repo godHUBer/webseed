@@ -695,7 +695,7 @@ window.App.toolManager = {
     sessionState: null, // snapshot of state before tool modifications
 
     openTool(toolId, uiCallback) {
-        if (this.activeToolId === toolId) return; // already open
+        if (this.activeToolId === toolId) { this.cancelTool(); return; }
         
         // Auto-revert previous tool without committing if switched aggressively
         if (this.activeToolId) {

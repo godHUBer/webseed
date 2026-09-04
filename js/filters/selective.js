@@ -98,7 +98,7 @@
         };
 
         btn.addEventListener('click', () => {
-            if (window.App.toolManager.activeToolId === 'btn-selective') return;
+            if (window.App.toolManager.activeToolId === 'btn-selective') { window.App.toolManager.cancelTool(); return; }
             window.App.toolManager.openTool('btn-selective', uiCallbackObj);
         });
 

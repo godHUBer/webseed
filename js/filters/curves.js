@@ -274,7 +274,7 @@ window.App.filtersLogic = window.App.filtersLogic || {};
 
         if (curvesBtn && popup) {
             curvesBtn.addEventListener('click', () => {
-                if (window.App.toolManager.activeToolId === 'btn-curves') return;
+                if (window.App.toolManager.activeToolId === 'btn-curves') { window.App.toolManager.cancelTool(); return; }
                 
                 window.App.toolManager.openTool('btn-curves', {
                     show: () => {

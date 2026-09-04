@@ -1390,15 +1390,24 @@ window.App.ui = {
             });
         }
 
+        // expose show for toolManager
+        this.showLensBlurUI = () => {
+            ensureLensBlurState();
+            overlay.style.display = 'block';
+            if (paramPopup) paramPopup.style.display = 'none';
+            setTimeout(() => {
+                syncOverlayCanvas();
+                this.drawLensBlurOverlay();
+            }, 50);
+        };
         if (btnLB) {
             btnLB.addEventListener('click', () => {
-                ensureLensBlurState();
-                overlay.style.display = 'block';
-                if (paramPopup) paramPopup.style.display = 'none';
-                setTimeout(() => {
-                    syncOverlayCanvas();
-                    this.drawLensBlurOverlay();
-                }, 50);
+                // If this click was a toggle-close handled by setupToolPopup, skip reopening
+                if (window.__toolToggleClosing === 'btn-lens-blur') { window.__toolToggleClosing = null; return; }
+                // Otherwise, ensure state and show (fallback if opened outside toolManager)
+                // But if already open via toolManager, this duplicate would double-show; guard
+                if (window.App.toolManager.activeToolId === 'btn-lens-blur') return;
+                this.showLensBlurUI();
             });
         }
         
@@ -1666,14 +1675,19 @@ window.App.ui = {
             });
         }
 
+        this.showVignetteUI = () => {
+            overlay.style.display = 'block';
+            ensureVignetteState();
+            setTimeout(() => {
+                syncOverlayCanvas();
+                this.drawVignetteOverlay();
+            }, 50);
+        };
         if (btnVig) {
             btnVig.addEventListener('click', () => {
-                overlay.style.display = 'block';
-                ensureVignetteState();
-                setTimeout(() => {
-                    syncOverlayCanvas();
-                    this.drawVignetteOverlay();
-                }, 50);
+                if (window.__toolToggleClosing === 'btn-vignette') { window.__toolToggleClosing = null; return; }
+                if (window.App.toolManager.activeToolId === 'btn-vignette') return;
+                this.showVignetteUI();
             });
         }
 
@@ -1883,16 +1897,21 @@ window.App.ui = {
             };
         };
         
+        this.showTextUI = () => {
+            syncTextOverlay();
+            overlay.style.display = 'block';
+            bottomBar.style.display = 'flex';
+            window.App.state.text.enabled = true;
+            if (customFontInput) {
+                customFontInput.value = window.App.state.text.customFontFamily || '';
+            }
+            window.App.canvas.scheduleRender();
+        };
         if (btnText) {
             btnText.addEventListener('click', () => {
-                syncTextOverlay();
-                overlay.style.display = 'block';
-                bottomBar.style.display = 'flex';
-                window.App.state.text.enabled = true;
-                if (customFontInput) {
-                    customFontInput.value = window.App.state.text.customFontFamily || '';
-                }
-                window.App.canvas.scheduleRender();
+                if (window.__toolToggleClosing === 'btn-text') { window.__toolToggleClosing = null; return; }
+                if (window.App.toolManager.activeToolId === 'btn-text') return;
+                this.showTextUI();
             });
         }
         
@@ -2591,7 +2610,7 @@ window.App.ui = {
             });
         } else {
             toolBtn.addEventListener('click', () => {
-                if (window.App.toolManager.activeToolId === btnId) return; // Ignore if already open
+                if (window.App.toolManager.activeToolId === btnId) { window.__toolToggleClosing = btnId; window.App.toolManager.cancelTool(); return; }
 
                 window.App.toolManager.openTool(btnId, {
                     show: () => {
@@ -2604,6 +2623,10 @@ window.App.ui = {
                             }
                         }
                         if (contextBar) contextBar.style.display = 'flex';
+                        // Phase C: ensure overlays show when opening via toolManager (covers duplicate btn handlers)
+                        if (btnId === 'btn-lens-blur' && window.App.ui && window.App.ui.showLensBlurUI) window.App.ui.showLensBlurUI();
+                        else if (btnId === 'btn-vignette' && window.App.ui && window.App.ui.showVignetteUI) window.App.ui.showVignetteUI();
+                        else if (btnId === 'btn-text' && window.App.ui && window.App.ui.showTextUI) window.App.ui.showTextUI();
                     },
                     hide: () => {
                         if (popup) popup.style.display = 'none';

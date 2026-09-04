@@ -232,7 +232,7 @@
         };
 
         toolBtn.addEventListener('click', () => {
-            if (window.App.toolManager.activeToolId === 'btn-brush') return;
+            if (window.App.toolManager.activeToolId === 'btn-brush') { window.App.toolManager.cancelTool(); return; }
             window.App.toolManager.openTool('btn-brush', uiCallbackObj);
         });
 

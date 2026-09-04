@@ -84,7 +84,7 @@ window.App.filtersLogic = window.App.filtersLogic || {};
 
         if(btn){
             btn.addEventListener('click', ()=>{
-                if(window.App.toolManager.activeToolId==='btn-expand') return;
+                if(window.App.toolManager.activeToolId==='btn-expand') { window.App.toolManager.cancelTool(); return; }
                 window.App.toolManager.openTool('btn-expand', {show, hide});
             });
         }

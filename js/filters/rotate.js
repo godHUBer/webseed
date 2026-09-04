@@ -21,7 +21,7 @@
         if (!rotateBtn || !overlay) return;
 
         rotateBtn.addEventListener('click', () => {
-            if (window.App.toolManager.activeToolId === 'btn-rotate') return;
+            if (window.App.toolManager.activeToolId === 'btn-rotate') { window.App.toolManager.cancelTool(); return; }
             
             window.App.toolManager.openTool('btn-rotate', {
                 show: () => {

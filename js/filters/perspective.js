@@ -115,7 +115,7 @@ window.App.filtersLogic = window.App.filtersLogic || {};
 
         if(btn){
             btn.addEventListener('click', ()=>{
-                if(window.App.toolManager.activeToolId==='btn-perspective') return;
+                if(window.App.toolManager.activeToolId==='btn-perspective') { window.App.toolManager.cancelTool(); return; }
                 window.App.toolManager.openTool('btn-perspective', {show, hide});
             });
         }
