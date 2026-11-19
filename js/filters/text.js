@@ -41,19 +41,20 @@
         const baseSize = height * 0.1; 
         ctx.scale(state.scale, state.scale);
 
+        // Phase C: align / spacing / shadow
+        const align = state.align || "center";
+        if(typeof ctx.letterSpacing !== 'undefined' && state.letterSpacing) ctx.letterSpacing = state.letterSpacing + 'px';
+        if(state.shadow){ ctx.shadowColor='rgba(0,0,0,0.55)'; ctx.shadowBlur=(height*0.1*0.18)*state.scale; ctx.shadowOffsetY= (height*0.008)*state.scale; }
+        else { ctx.shadowColor='transparent'; ctx.shadowBlur=0; }
         // Render based on style
         const style = state.styleId || "N1";
         const color = state.color || "#ffffff";
         const inverted = state.inverted;
         const text = state.content;
-
-        // Reset composer
         ctx.globalCompositeOperation = 'source-over';
-
         if (style.startsWith("N")) {
-            // N Series: Plain text
             ctx.fillStyle = color;
-            ctx.textAlign = "center";
+            ctx.textAlign = align;
             ctx.textBaseline = "middle";
             ctx.font = style === "N2"
                 ? buildFontDeclaration(state, baseSize, "'Inter'", "600")
@@ -70,14 +71,18 @@
                 ctx.globalCompositeOperation = 'destination-out';
                 ctx.fillText(text, 0, baseSize * 0.1); 
             } else {
-                ctx.fillText(text, 0, baseSize * 0.1); // slight vertical optical correction
+                ctx.fillText(text, 0, baseSize * 0.1);
+                if(state.outline){
+                    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+                    ctx.lineWidth = baseSize * 0.045;
+                    ctx.strokeText(text, 0, baseSize * 0.1);
+                }
             }
 
         } else if (style.startsWith("L")) {
-            // L Series: Lines
             ctx.fillStyle = color;
             ctx.strokeStyle = color;
-            ctx.textAlign = "center";
+            ctx.textAlign = align;
             ctx.textBaseline = "middle";
             ctx.font = buildFontDeclaration(state, baseSize, "'Oswald'", "500");
             
@@ -108,9 +113,8 @@
             }
 
         } else if (style.startsWith("H")) {
-            // H Series: Handwritten
             ctx.fillStyle = color;
-            ctx.textAlign = "center";
+            ctx.textAlign = align;
             ctx.textBaseline = "middle";
             ctx.font = buildFontDeclaration(state, baseSize * 1.5, "'Caveat'", "700");
             

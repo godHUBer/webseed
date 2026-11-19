@@ -83,8 +83,16 @@ window.App.exportService = {
 
         const { sx, sy, sw, sh } = this.getCropSourceBounds();
         const isRotatedOrthogonal = Math.abs(geom.rotate) % 180 === 90;
-        const baseW = sw;
-        const baseH = sh;
+        let baseW = sw;
+        let baseH = sh;
+        // expand: grow base for export
+        const exp = window.App.state.expand;
+        let hasExpand = exp && exp.enabled && exp.pad && Object.values(exp.pad).some(v=> (v||0)>0.006);
+        if(hasExpand){
+            const pad=exp.pad;
+            baseW = baseW * (1 + (pad.left||0)+(pad.right||0));
+            baseH = baseH * (1 + (pad.top||0)+(pad.bottom||0));
+        }
         const outputW = Math.max(1, Math.round(isRotatedOrthogonal ? baseH : baseW));
         const outputH = Math.max(1, Math.round(isRotatedOrthogonal ? baseW : baseH));
 
@@ -102,22 +110,50 @@ window.App.exportService = {
         ctx.rotate((totalRotation * Math.PI) / 180);
         ctx.scale(geom.flipX ? -1 : 1, geom.flipY ? -1 : 1);
 
-        const drawW = isRotatedOrthogonal ? outputH : outputW;
-        const drawH = isRotatedOrthogonal ? outputW : outputH;
-        const dx = -drawW / 2;
-        const dy = -drawH / 2;
-
+        let drawW0 = isRotatedOrthogonal ? outputH : outputW;
+        let drawH0 = isRotatedOrthogonal ? outputW : outputH;
+        // for expand, compute inner size
+        let drawW = drawW0, drawH = drawH0;
+        let dx = -drawW/2, dy = -drawH/2;
+        let hasExpandInner = hasExpand;
+        let innerW = drawW0, innerH = drawH0;
+        let innerDx = dx, innerDy = dy;
+        if(hasExpandInner){
+            const pad=exp.pad;
+            const totalW=(pad.left||0)+(pad.right||0), totalH=(pad.top||0)+(pad.bottom||0);
+            innerW = drawW0/(1+totalW);
+            innerH = drawH0/(1+totalH);
+            const leftOff = (pad.left||0)/(1+totalW)*drawW0;
+            const topOff = (pad.top||0)/(1+totalH)*drawH0;
+            innerDx = -drawW0/2 + leftOff;
+            innerDy = -drawH0/2 + topOff;
+            // fill border for export
+            const mode=exp.mode||'smart';
+            ctx.save();
+            if(mode==='white'){ ctx.fillStyle='#ffffff'; ctx.fillRect(-drawW0/2,-drawH0/2,drawW0,drawH0); }
+            else if(mode==='black'){ ctx.fillStyle='#0a0a0f'; ctx.fillRect(-drawW0/2,-drawH0/2,drawW0,drawH0); }
+            else if(mode==='reflect'){
+                ctx.fillStyle='rgba(0,0,0,0.04)'; ctx.fillRect(-drawW0/2,-drawH0/2,drawW0,drawH0);
+            } else { // smart — blurred fill approximation
+                ctx.save(); ctx.filter='blur(22px)';
+                ctx.drawImage(img, sx, sy, sw, sh, -drawW0/2, -drawH0/2, drawW0, drawH0);
+                ctx.restore();
+            }
+            ctx.restore();
+            drawW = innerW; drawH = innerH; dx = innerDx; dy = innerDy;
+        }
         if (geom.straighten && geom.straighten !== 0) {
-            ctx.filter = 'blur(40px)';
-            ctx.save(); ctx.scale(-1, 1); ctx.drawImage(img, sx, sy, sw, sh, -dx - drawW * 2, dy, drawW, drawH); ctx.restore();
-            ctx.save(); ctx.scale(-1, 1); ctx.drawImage(img, sx, sy, sw, sh, -dx, dy, drawW, drawH); ctx.restore();
-            ctx.save(); ctx.scale(1, -1); ctx.drawImage(img, sx, sy, sw, sh, dx, -dy - drawH * 2, drawW, drawH); ctx.restore();
-            ctx.save(); ctx.scale(1, -1); ctx.drawImage(img, sx, sy, sw, sh, dx, -dy, drawW, drawH); ctx.restore();
-            ctx.save(); ctx.scale(-1, -1); ctx.drawImage(img, sx, sy, sw, sh, -dx, -dy, drawW, drawH); ctx.restore();
-            ctx.save(); ctx.scale(-1, -1); ctx.drawImage(img, sx, sy, sw, sh, -dx - drawW * 2, -dy, drawW, drawH); ctx.restore();
-            ctx.save(); ctx.scale(-1, -1); ctx.drawImage(img, sx, sy, sw, sh, -dx, -dy - drawH * 2, drawW, drawH); ctx.restore();
-            ctx.save(); ctx.scale(-1, -1); ctx.drawImage(img, sx, sy, sw, sh, -dx - drawW * 2, -dy - drawH * 2, drawW, drawH); ctx.restore();
-            ctx.filter = 'none';
+            const theta = geom.straighten * Math.PI/180;
+            const absCos = Math.abs(Math.cos(theta)), absSin = Math.abs(Math.sin(theta));
+            const baseW0 = hasExpandInner ? innerW : drawW0;
+            const baseH0 = hasExpandInner ? innerH : drawH0;
+            const needW = baseW0*absCos + baseH0*absSin;
+            const needH = baseW0*absSin + baseH0*absCos;
+            let extraScale = Math.max(needW/baseW0, needH/baseH0)*1.015;
+            const centerX = hasExpandInner ? (innerDx+innerW/2) : 0;
+            const centerY = hasExpandInner ? (innerDy+innerH/2) : 0;
+            drawW = baseW0*extraScale; drawH = baseH0*extraScale;
+            dx = centerX - drawW/2; dy = centerY - drawH/2;
         }
 
         ctx.drawImage(img, sx, sy, sw, sh, dx, dy, drawW, drawH);

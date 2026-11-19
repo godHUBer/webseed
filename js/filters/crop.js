@@ -120,7 +120,7 @@
         if (!cropBtn || !overlay) return;
 
         cropBtn.addEventListener('click', () => {
-            if (window.App.toolManager.activeToolId === 'btn-crop') return;
+            if (window.App.toolManager.activeToolId === 'btn-crop') { window.App.toolManager.cancelTool(); return; }
             
             window.App.toolManager.openTool('btn-crop', {
                 show: () => {

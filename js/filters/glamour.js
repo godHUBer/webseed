@@ -102,19 +102,28 @@
         if (glow === 0 && sat === 0 && warmth === 0) return;
 
         let blurred = null;
-
         if (glow > 0) {
-            // Because creating a massive RGB blur is costly, we cache it.
-            // We can safely use the cache IF we are currently editing the Glamour Glow tool 
-            // (meaning upstream filters haven't changed) AND the glow radius parameter hasn't changed.
             const isEditingGlow = window.App.toolManager && window.App.toolManager.activeToolId === 'btn-glamour-glow';
-            
             if (isEditingGlow && cachedBlur && cachedSourceWidth === width && cachedSourceHeight === height && cachedGlowValue === glow) {
                 blurred = cachedBlur;
             } else {
-                const radius = Math.max(2, Math.floor(width * 0.05)); // 5% of width is a very soft halo
-                blurred = boxBlurRGB(data, width, height, Math.floor(radius));
-                
+                const radius = Math.max(2, Math.floor(width * 0.045));
+                // Phase C: threshold bloom — only brights bloom, preserves skin midtones
+                const thresh = new Uint8ClampedArray(data.length);
+                for(let i=0;i<data.length;i+=4){
+                    const lum = (0.2126*data[i] + 0.7152*data[i+1] + 0.0722*data[i+2])/255;
+                    if(lum > 0.58){
+                        const boost = Math.min(1, (lum-0.58)/0.38);
+                        // soft threshold + lift
+                        thresh[i]= data[i]*0.85 + 255*0.15*boost;
+                        thresh[i+1]= data[i+1]*0.85 + 255*0.15*boost;
+                        thresh[i+2]= data[i+2]*0.85 + 255*0.15*boost;
+                        thresh[i+3]=255;
+                    } else {
+                        thresh[i]=0; thresh[i+1]=0; thresh[i+2]=0; thresh[i+3]=255;
+                    }
+                }
+                blurred = boxBlurRGB(thresh, width, height, Math.floor(radius));
                 cachedBlur = blurred;
                 cachedGlowValue = glow;
                 cachedSourceWidth = width;
